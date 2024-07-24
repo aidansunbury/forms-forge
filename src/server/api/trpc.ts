@@ -13,6 +13,8 @@ import { ZodError } from "zod";
 
 import { getServerAuthSession } from "@/server/auth";
 import { db } from "@/server/db";
+import { roleEnum } from "../db/schema";
+import { satisfiesRole } from "@/lib/satisfiesRole";
 
 /**
  * 1. CONTEXT
@@ -131,3 +133,33 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+// Todo add role hierarchy
+
+export type Role = (typeof roleEnum.enumValues)[number];
+
+export const orgScopedProcedure = (requiredRole: Role) => {
+  return protectedProcedure.use(async ({ ctx, next, getRawInput }) => {
+    const request = (await getRawInput()) as { orgId: string };
+    const orgId = request.orgId;
+    console.log(orgId);
+    console.log(ctx.session.user);
+    for (const org of ctx.session.user.organizations) {
+      if (
+        org.organizationId === orgId &&
+        satisfiesRole(org.role as Role, requiredRole)
+      ) {
+        return next({
+          ctx: {
+            ...ctx,
+          },
+        });
+      }
+    }
+
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Not authorized to access organization",
+    });
+  });
+};

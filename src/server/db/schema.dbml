@@ -1,0 +1,156 @@
+enum field_type_enum {
+  text
+  multipleChoice
+}
+
+enum form_status_enum {
+  started
+  completed
+  submitted
+}
+
+table account {
+  user_id varchar(255) [not null]
+  type varchar(255) [not null]
+  provider varchar(255) [not null]
+  provider_account_id varchar(255) [not null]
+  refresh_token text
+  access_token text
+  expires_at integer
+  token_type varchar(255)
+  scope varchar(255)
+  id_token text
+  session_state varchar(255)
+
+  indexes {
+    (provider, provider_account_id) [pk]
+    user_id [name: 'account_user_id_idx']
+  }
+}
+
+table board {
+  id varchar(255) [pk, not null]
+  board_name varchar(255) [not null]
+  created_at "timestamp with time zone" [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+table column {
+  id varchar(255) [pk, not null]
+  column_name varchar(255) [not null]
+  board_id varchar(255) [not null]
+  position_index integer [not null]
+  created_at "timestamp with time zone" [not null, default: `CURRENT_TIMESTAMP`]
+
+  indexes {
+    board_id [name: 'column_board_id_idx']
+  }
+}
+
+table form {
+  id varchar(255) [pk, not null]
+  form_name varchar(255) [not null]
+  form_options json
+  board_id varchar(255) [not null]
+  organization_id varchar [not null]
+
+  indexes {
+    organization_id [name: 'form_organization_id_idx']
+  }
+}
+
+table form_field_responses {
+  id varchar(255) [pk, not null]
+  form_response_id varchar(255) [not null]
+  form_field_id varchar(255) [not null]
+  response text
+}
+
+table form_fields {
+  id varchar(255) [pk, not null]
+  form_id varchar(255) [not null]
+  section_id varchar(255) [not null]
+  position_index integer [not null]
+  field_name varchar(255) [not null]
+  field_type field_type_enum [not null]
+  field_options json
+}
+
+table form_responses {
+  id varchar(255) [pk, not null]
+  form_id varchar [not null]
+  column_id varchar(255) [not null]
+  position_index integer [not null]
+  user_id varchar(255) [not null]
+  status form_status_enum [not null]
+}
+
+table form_sections {
+  id varchar(255) [pk, not null]
+  form_id varchar(255) [not null]
+  section_name varchar(255) [not null]
+  section_index integer [not null]
+}
+
+table organization {
+  id varchar(255) [pk, not null]
+  organization_name varchar(255) [not null]
+}
+
+table session {
+  session_token varchar(255) [pk, not null]
+  user_id varchar(255) [not null]
+  expires "timestamp with time zone" [not null]
+
+  indexes {
+    user_id [name: 'session_user_id_idx']
+  }
+}
+
+table user_organizations {
+  user_id varchar(255) [not null]
+  organization_id varchar [not null]
+
+  indexes {
+    (user_id, organization_id) [pk]
+    user_id [name: 'user_organizations_user_id_idx']
+    organization_id [name: 'user_organizations_organization_id_idx']
+  }
+}
+
+table user {
+  id varchar(255) [pk, not null]
+  name varchar(255)
+  email varchar(255) [not null]
+  email_verified "timestamp with time zone" [default: `CURRENT_TIMESTAMP`]
+  image varchar(255)
+}
+
+table verification_token {
+  identifier varchar(255) [not null]
+  token varchar(255) [not null]
+  expires "timestamp with time zone" [not null]
+
+  indexes {
+    (identifier, token) [pk]
+  }
+}
+
+ref: account.user_id > user.id
+
+ref: column.board_id > board.id
+
+ref: form_field_responses.form_response_id - form_responses.id
+
+ref: form_field_responses.form_field_id - form_fields.id
+
+ref: form_fields.form_id > form.id
+
+ref: form_responses.form_id > form.id
+
+ref: form_sections.form_id > form.id
+
+ref: session.user_id - user.id
+
+ref: user_organizations.user_id > user.id
+
+ref: user_organizations.organization_id > organization.id

@@ -5,7 +5,7 @@ import {
   type NextAuthOptions,
 } from "next-auth";
 import { type Adapter } from "next-auth/adapters";
-import DiscordProvider from "next-auth/providers/discord";
+import Google from "next-auth/providers/google";
 
 import { env } from "@/env";
 import { db } from "@/server/db";
@@ -14,7 +14,17 @@ import {
   sessions,
   users,
   verificationTokens,
+  userOrganizations,
+  organizations,
 } from "@/server/db/schema";
+
+import { eq } from "drizzle-orm";
+
+type OrgRelation = {
+  userId: string;
+  organizationId: string;
+  role: string;
+};
 
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
@@ -27,14 +37,54 @@ declare module "next-auth" {
     user: {
       id: string;
       // ...other properties
-      // role: UserRole;
+      organizations: OrgRelation[];
     } & DefaultSession["user"];
   }
 
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
+  interface User {
+    testField?: string;
+    organizations: OrgRelation[];
+  }
+}
+
+// Used to include the user's organization roles in the session object.
+export function CustomAdapter(
+  client: any, //PgDatabase<QueryResultHKT, any>,
+  schema?: any, //DefaultPostgresSchema
+): Adapter {
+  const originalAdapter = DrizzleAdapter(client, schema);
+
+  const customAdapter = {
+    ...originalAdapter,
+    async getSessionAndUser(sessionToken: string) {
+      const test2 = await db.query.sessions.findFirst({
+        where: (sessions, { eq }) => eq(sessions.sessionToken, sessionToken),
+        with: {
+          user: {
+            with: {
+              organizations: true,
+            },
+          },
+        },
+      });
+      if (!test2) {
+        return null;
+      }
+
+      const formatted = {
+        session: {
+          sessionToken: test2.sessionToken,
+          expires: test2.expires,
+          userId: test2.userId,
+        },
+        user: test2.user,
+      };
+
+      return formatted;
+    },
+  };
+
+  return customAdapter as any;
 }
 
 /**
@@ -49,19 +99,21 @@ export const authOptions: NextAuthOptions = {
       user: {
         ...session.user,
         id: user.id,
+        organizations: user.organizations,
       },
     }),
   },
-  adapter: DrizzleAdapter(db, {
+  adapter: CustomAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
+    userOrganizations,
     verificationTokensTable: verificationTokens,
   }) as Adapter,
   providers: [
-    DiscordProvider({
-      clientId: env.DISCORD_CLIENT_ID,
-      clientSecret: env.DISCORD_CLIENT_SECRET,
+    Google({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
     }),
     /**
      * ...add more providers here.
