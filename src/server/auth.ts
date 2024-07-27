@@ -23,6 +23,10 @@ import { eq } from "drizzle-orm";
 type OrgRelation = {
   userId: string;
   organizationId: string;
+  organization: {
+    organizationName: string;
+    organizationSlug: string;
+  };
   role: string;
 };
 
@@ -62,11 +66,16 @@ export function CustomAdapter(
         with: {
           user: {
             with: {
-              organizations: true,
+              organizations: {
+                with: {
+                  organization: true,
+                },
+              },
             },
           },
         },
       });
+
       if (!test2) {
         return null;
       }

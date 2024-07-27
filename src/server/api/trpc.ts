@@ -91,7 +91,8 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
   if (t._config.isDev) {
     // artificial delay in dev
-    const waitMs = Math.floor(Math.random() * 400) + 100;
+    const waitMs = 0; //Math.floor(Math.random() * 400) + 100;
+    console.log(`[TRPC] ${path} waiting ${waitMs}ms`);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
@@ -133,8 +134,6 @@ export const protectedProcedure = t.procedure
       },
     });
   });
-
-// Todo add role hierarchy
 
 export type Role = (typeof roleEnum.enumValues)[number];
 

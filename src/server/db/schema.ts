@@ -9,9 +9,21 @@ import {
   varchar,
   json,
   pgEnum,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "next-auth/adapters";
 import crypto from "crypto";
+
+export type FieldOptions = {
+  options: {
+    positionIndex: number;
+    label: string;
+  }[];
+};
+
+export const defaultFieldOptions: FieldOptions = {
+  options: [],
+};
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -47,13 +59,24 @@ export const usersRelations = relations(users, ({ many }) => ({
   formResponses: many(formResponse),
 }));
 
-export const organizations = createTable("organization", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => generatePrefixedUUID("organization")),
-  organizationName: varchar("organization_name", { length: 255 }).notNull(),
-});
+export const organizations = createTable(
+  "organization",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generatePrefixedUUID("organization")),
+    organizationName: varchar("organization_name", { length: 255 }).notNull(),
+    organizationSlug: varchar("organization_slug", { length: 255 })
+      .notNull()
+      .unique(),
+  },
+  (organizations) => ({
+    organizationSlugIdx: index("organization_organization_slug_idx").on(
+      organizations.organizationSlug,
+    ),
+  }),
+);
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   users: many(userOrganizations),
@@ -113,7 +136,8 @@ export const form = createTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("form")),
-    formName: varchar("form_name", { length: 255 }).notNull(),
+    formName: varchar("form_name").notNull(),
+    formDescription: varchar("form_description"),
     formOptions: json("form_options"),
     boardId: varchar("board_id", { length: 255 })
       .notNull()
@@ -134,7 +158,10 @@ export const form = createTable(
 export const formRelations = relations(form, ({ many, one }) => ({
   formFields: many(formFields),
   formResponses: many(formResponse),
-  organization: one(organizations),
+  organization: one(organizations, {
+    fields: [form.organizationId],
+    references: [organizations.id],
+  }),
   board: one(boards),
   sections: many(formSections),
 }));
@@ -147,7 +174,8 @@ export const formSections = createTable("form_sections", {
   formId: varchar("form_id", { length: 255 })
     .notNull()
     .references(() => form.id),
-  sectionName: varchar("section_name", { length: 255 }).notNull(),
+  sectionName: varchar("section_name").notNull(),
+  sectionDescription: varchar("section_description"),
   positionIndex: integer("section_index").notNull(), // Order of the section in the form just use numbers with lots of space between them
 });
 
@@ -176,14 +204,22 @@ export const formFields = createTable("form_fields", {
     .notNull()
     .references(() => formSections.id),
   positionIndex: integer("position_index").notNull(), // Order of the field in the section
-  fieldName: varchar("field_name", { length: 255 }).notNull(),
+  fieldName: varchar("field_name").notNull(),
+  fieldDescription: varchar("field_description"),
   fieldType: fieldTypeEnum("field_type").notNull(),
-  fieldOptions: json("field_options"),
+  fieldOptions: json("field_options")
+    .$type<FieldOptions>()
+    .notNull()
+    .default(defaultFieldOptions),
+  required: boolean("required").notNull().default(false),
 });
 
 export const formFieldsRelations = relations(formFields, ({ one }) => ({
   form: one(form, { fields: [formFields.formId], references: [form.id] }),
-  section: one(formSections),
+  section: one(formSections, {
+    fields: [formFields.sectionId],
+    references: [formSections.id],
+  }),
 }));
 
 export const formStatusEnum = pgEnum("form_status_enum", [
@@ -255,10 +291,10 @@ export const boards = createTable("board", {
     .primaryKey()
     .$defaultFn(() => generatePrefixedUUID("board")),
 
-  boardName: varchar("board_name", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
+  // boardName: varchar("board_name", { length: 255 }).notNull(),
+  // createdAt: timestamp("created_at", { withTimezone: true })
+  //   .default(sql`CURRENT_TIMESTAMP`)
+  //   .notNull(),
 });
 
 // Relationships
@@ -280,9 +316,9 @@ export const columns = createTable(
       .notNull()
       .references(() => boards.id),
     positionIndex: integer("position_index").notNull(), // Used to order the columns on the board
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
+    // createdAt: timestamp("created_at", { withTimezone: true })
+    //   .default(sql`CURRENT_TIMESTAMP`)
+    //   .notNull(),
   },
   (column) => ({
     boardIdIdx: index("column_board_id_idx").on(column.boardId),
