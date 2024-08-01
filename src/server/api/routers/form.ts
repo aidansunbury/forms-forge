@@ -1,7 +1,16 @@
 import { z } from "zod";
 
-import { createTRPCRouter, orgScopedProcedure } from "@/server/api/trpc";
-import { withOrgId, AddFieldSchema, RemoveFieldSchema } from "@/lib/validators";
+import {
+  createTRPCRouter,
+  orgScopedProcedure,
+  protectedProcedure,
+} from "@/server/api/trpc";
+import {
+  withOrgId,
+  AddFieldSchema,
+  RemoveFieldSchema,
+  formUpdateSchema,
+} from "@/lib/validators";
 
 import { db } from "@/server/db";
 import { eq, asc } from "drizzle-orm";
@@ -110,7 +119,7 @@ export const formRouter = createTRPCRouter({
         return error;
       }
     }),
-  removeField: orgScopedProcedure("admin")
+  removeField: protectedProcedure
     .input(RemoveFieldSchema)
     .mutation(async ({ input }) => {
       try {
@@ -119,6 +128,53 @@ export const formRouter = createTRPCRouter({
           .where(eq(formFields.id, input.fieldId))
           .returning();
         return deletedField;
+      } catch (error) {
+        console.log(error);
+        return error;
+      }
+    }),
+
+  updateForm: protectedProcedure
+    .input(formUpdateSchema.array())
+    .mutation(async ({ input }) => {
+      try {
+        const updates = [];
+        for (const update of input) {
+          if (update.type === "field") {
+            console.log(update);
+
+            const { id, ...data } = update.data;
+
+            const result = await db
+              .update(formFields)
+              .set(data)
+              .where(eq(formFields.id, update.data.id as string))
+              .returning();
+            updates.push(result);
+          } else if (update.type === "form") {
+            const { id, ...data } = update.data;
+            updates.push(
+              await db
+                .update(form)
+                .set(data)
+                .where(eq(form.id, id as string))
+                .returning(),
+            );
+          } else if (update.type === "new") {
+            updates.push(
+              await db.insert(formFields).values(update.data).returning(),
+            );
+          } else if (update.type === "delete") {
+            console.log(update);
+            updates.push(
+              await db
+                .delete(formFields)
+                .where(eq(formFields.id, update.data.id))
+                .returning(),
+            );
+          }
+        }
+        return updates;
       } catch (error) {
         console.log(error);
         return error;

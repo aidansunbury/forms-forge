@@ -1,20 +1,17 @@
 "use client";
 
-import { useForm, useFieldArray, FormProvider } from "react-hook-form";
+import {
+  useForm,
+  useFieldArray,
+  FormProvider,
+  useFormContext,
+} from "react-hook-form";
 
 import { form, formFields, formSections } from "@/server/db/schema";
 import { InferSelectModel } from "drizzle-orm";
 import { InputWrapper } from "./InputWrapper";
 
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form } from "@/components/ui/form";
 
 import {
   Card,
@@ -33,7 +30,12 @@ import {
   SelectedItemProvider,
   useSelectedItem,
 } from "@/app/hooks/useSelectedItem";
-import { Toolbar } from "./Toolbar";
+import { Toolbar } from "./Toolbar/DynamicToolbar";
+
+import { useEffect } from "react";
+import { set } from "zod";
+
+import { FormHeader } from "./FormHeader";
 
 // Complete form selection type
 export type FormData = InferSelectModel<typeof form> & {
@@ -44,12 +46,54 @@ export type FormData = InferSelectModel<typeof form> & {
   >;
 };
 
+type FormUpdate =
+  | { type: "form"; data: InferSelectModel<typeof form> }
+  | {
+      type: "section";
+      data: InferSelectModel<typeof formSections>;
+    }
+  | {
+      type: "field";
+      data: InferSelectModel<typeof formFields>;
+    };
+
+const findById = (id: string, data: FormData): FormUpdate | null => {
+  if (id.includes("form")) {
+    return {
+      type: "form",
+      data: { ...data, sections: [] } as any,
+    };
+  } else if (id.includes("section")) {
+    const section = data.sections.find((section) => section.id === id);
+    if (!section) {
+      return null;
+    }
+    return {
+      type: "section",
+      data: { ...section },
+    };
+  } else if (id.includes("field")) {
+    console.log("field");
+    for (const section of data.sections) {
+      const field = section.fields.find((field) => field.id === id);
+      if (field) {
+        return {
+          type: "field",
+          data: { ...field },
+        };
+      }
+    }
+    return null;
+  }
+  return null;
+};
+
 export const FormViewer = ({ formData }: { formData: FormData }) => {
   const form = useForm<FormData>({
     defaultValues: formData,
   });
 
-  const { fields } = useFieldArray({
+  const { fields, append } = useFieldArray({
     control: form.control,
     name: "sections",
   });
@@ -60,49 +104,14 @@ export const FormViewer = ({ formData }: { formData: FormData }) => {
 
   return (
     <div className="w-full max-w-[800px] self-center">
-      <SelectedItemProvider>
-        <Toolbar />
-        <FormProvider {...form}>
-          <Form {...form}>
+      <FormProvider {...form}>
+        {/* <SelectedLogger /> */}
+        <Form {...form}>
+          <SelectedItemProvider
+            captureState={(id) => findById(id, form.getValues())}
+          >
             <form onSubmit={form.handleSubmit(onSubmit)}>
-              <Card id="field-title">
-                <CardContent className="pt-2">
-                  <FormField
-                    control={form.control}
-                    name="formName"
-                    render={({ field }) => (
-                      <FormItem className="">
-                        <FormControl>
-                          <Input
-                            placeholder="New Form"
-                            className="h-12 px-0 text-2xl"
-                            variant={"baseline"}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="formDescription"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input
-                            placeholder="Description"
-                            className="h-8 border-b px-0 hover:border-gray-600"
-                            variant={"baseline"}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+              <FormHeader />
               <div>
                 {fields.map((section, index) => (
                   <Section
@@ -112,12 +121,14 @@ export const FormViewer = ({ formData }: { formData: FormData }) => {
                     index={index}
                   />
                 ))}
-                <Button type="submit">Submit</Button>
+                <Button type="submit" className="mb-24 lg:mb-16">
+                  Submit
+                </Button>
               </div>
             </form>
-          </Form>
-        </FormProvider>
-      </SelectedItemProvider>
+          </SelectedItemProvider>
+        </Form>
+      </FormProvider>
     </div>
   );
 };

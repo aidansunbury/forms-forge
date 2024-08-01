@@ -42,8 +42,8 @@ export default function OrgLayout({
   const segments = router.split("/").slice(1);
   return (
     <TooltipProvider>
-      {JSON.stringify(params)}
-      {JSON.stringify(router)}
+      {/* {JSON.stringify(params)} */}
+      {/* {JSON.stringify(router)} */}
       <div className="flex min-h-screen w-full flex-col bg-muted/40">
         <aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">
           <nav className="flex flex-col items-center gap-4 px-2 sm:py-5">
@@ -109,14 +109,16 @@ export default function OrgLayout({
             <Breadcrumb className="hidden md:flex">
               <BreadcrumbList>
                 {segments.map((segment, index) => (
-                  <BreadcrumbItem key={index}>
-                    <BreadcrumbLink
-                      href={`/${segments.slice(0, index + 1).join("/")}`}
-                    >
-                      {segment}
-                    </BreadcrumbLink>
+                  <>
+                    <BreadcrumbItem key={index}>
+                      <BreadcrumbLink
+                        href={`/${segments.slice(0, index + 1).join("/")}`}
+                      >
+                        {segment}
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
                     {index < segments.length - 1 && <BreadcrumbSeparator />}
-                  </BreadcrumbItem>
+                  </>
                 ))}
               </BreadcrumbList>
             </Breadcrumb>

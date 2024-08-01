@@ -69,11 +69,12 @@ export const MultipleChoice = ({
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
     index: number,
+    prevIndex: number,
   ) => {
     if (e.key === "Enter") {
       e.preventDefault();
       // Todo this needs some position indexing when we get to moving them around
-      append({ label: "New Option" });
+      append({ label: "New Option", positionIndex: prevIndex + 1000 });
       //   e.currentTarget.value = "";
     } else if (e.key === "Backspace" && e.currentTarget.value === "") {
       e.preventDefault();
@@ -106,7 +107,9 @@ export const MultipleChoice = ({
                     {...field}
                     ref={index === fields.length - 1 ? lastInputRef : null}
                     className="focus-ring-0 m-1 h-12 rounded-none border-0 border-b-2 border-solid outline-none hover:border-gray-900 focus-visible:ring-0"
-                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    onKeyDown={(e) =>
+                      handleKeyDown(e, index, option.positionIndex)
+                    }
                   />
                 </FormControl>
                 <FormMessage />

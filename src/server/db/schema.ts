@@ -162,7 +162,7 @@ export const formRelations = relations(form, ({ many, one }) => ({
     fields: [form.organizationId],
     references: [organizations.id],
   }),
-  board: one(boards),
+  // board: one(boards),
   sections: many(formSections),
 }));
 
@@ -250,8 +250,11 @@ export const formResponse = createTable("form_responses", {
 
 export const formResponseRelations = relations(formResponse, ({ one }) => ({
   form: one(form, { fields: [formResponse.formId], references: [form.id] }),
-  user: one(users),
-  column: one(columns),
+  user: one(users, { fields: [formResponse.userId], references: [users.id] }),
+  column: one(columns, {
+    fields: [formResponse.columnId],
+    references: [columns.id],
+  }),
 }));
 
 export const formFieldResponse = createTable("form_field_responses", {
@@ -300,7 +303,7 @@ export const boards = createTable("board", {
 // Relationships
 export const boardsRelations = relations(boards, ({ many, one }) => ({
   columns: many(columns),
-  form: one(form),
+  // form: one(form),
 }));
 
 // Columns table

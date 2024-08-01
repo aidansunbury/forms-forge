@@ -57,8 +57,9 @@ export const InputWrapper = ({
   onDelete,
   onCopy,
 }: InputWrapperProps) => {
-  const { watch } = useFormContext<FormData>();
-  const { setSelectedItemId, isSelected } = useSelectedItem();
+  const { watch, getValues } = useFormContext<FormData>();
+  const { setSelectedItemId, setSelectedItemContent, isSelected } =
+    useSelectedItem();
   function renderInput(fieldType: string) {
     switch (fieldType) {
       case "text":
@@ -68,13 +69,16 @@ export const InputWrapper = ({
     }
   }
 
+  const fieldId = getValues(name).id as any;
+
   return (
     <Card
       className="mb-5"
-      id={`field-${field.id}`}
-      variant={isSelected(`field-${field.id}`) ? "selected" : "default"}
+      id={fieldId}
+      variant={isSelected(fieldId) ? "selected" : "default"}
       onClick={() => {
-        setSelectedItemId(`field-${field.id}`);
+        setSelectedItemId(fieldId);
+        setSelectedItemContent(getValues(name));
       }}
     >
       <CardHeader className="flex flex-1 flex-row space-x-5">
@@ -98,7 +102,7 @@ export const InputWrapper = ({
           />
         </div>
         {/* <Separator orientation="vertical" /> */}
-        {isSelected(`field-${field.id}`) && (
+        {isSelected(fieldId) && (
           <FormField
             control={control}
             name={`${name}.fieldType` as any}
@@ -130,7 +134,7 @@ export const InputWrapper = ({
         {renderInput(watch(`${name}.fieldType` as any))}
       </CardContent>
       <Separator />
-      {isSelected(`field-${field.id}`) && (
+      {isSelected(fieldId) && (
         <CardFooter className="flex-row justify-end space-x-1 py-3">
           <Button variant="ghost" onClick={onDelete}>
             <Trash2 size={20} />

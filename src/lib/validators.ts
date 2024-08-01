@@ -1,9 +1,8 @@
-import { definition } from "./../server/api/root";
 import { min } from "drizzle-orm";
 import { z } from "zod";
 import { createInsertSchema } from "drizzle-zod";
 import { create } from "domain";
-import { formFields } from "@/server/db/schema";
+import { formFields, form } from "@/server/db/schema";
 
 export const withOrgId = z.object({
   orgId: z.string(),
@@ -46,3 +45,52 @@ export const AddFieldSchema = createInsertSchema(formFields)
 export const RemoveFieldSchema = z.object({
   fieldId: z.string(),
 });
+
+// Form update schema
+
+const updateFieldSchema = z.object({
+  type: z.literal("field"),
+  data: createInsertSchema(formFields),
+});
+
+const updateFormSchema = z.object({
+  type: z.literal("form"),
+  data: createInsertSchema(form),
+});
+
+const deleteFieldSchema = z.object({
+  type: z.literal("delete"),
+  data: z.object({
+    id: z.string(),
+  }),
+});
+
+const createFieldSchema = z.object({
+  type: z.literal("new"),
+  data: createInsertSchema(formFields),
+});
+
+export const formUpdateSchema = z.discriminatedUnion("type", [
+  updateFieldSchema,
+  updateFormSchema,
+  deleteFieldSchema,
+  createFieldSchema,
+]);
+
+// Infer the types from the schemas
+type UpdateField = z.infer<typeof updateFieldSchema>;
+type UpdateForm = z.infer<typeof updateFormSchema>;
+type DeleteField = z.infer<typeof deleteFieldSchema>;
+type CreateField = z.infer<typeof createFieldSchema>;
+
+type FormUpdate = UpdateField | UpdateForm | DeleteField | CreateField;
+
+// Type guards
+const isUpdateField = (update: FormUpdate): update is UpdateField =>
+  update.type === "field";
+const isUpdateForm = (update: FormUpdate): update is UpdateForm =>
+  update.type === "form";
+const isDeleteField = (update: FormUpdate): update is DeleteField =>
+  update.type === "delete";
+const isCreateField = (update: FormUpdate): update is CreateField =>
+  update.type === "new";
