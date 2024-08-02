@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import { getServerAuthSession } from "@/server/auth";
-import { api, HydrateClient } from "@/trpc/server";
-import { LatestPost } from "./_components/post";
+import { HydrateClient } from "@/trpc/server";
+
+import { useEffect } from "react";
+import Picker from "./_components/Picker";
 
 export default async function Home() {
   const session = await getServerAuthSession();
@@ -26,6 +28,7 @@ export default async function Home() {
               >
                 {session ? "Sign out" : "Sign in"}
               </Link>
+              <Picker token={session?.user.googleAccessToken} />
             </div>
           </div>
         </div>

@@ -96,6 +96,8 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
+  // Todo implement logging like this middleware
+
   const result = await next();
 
   const end = Date.now();

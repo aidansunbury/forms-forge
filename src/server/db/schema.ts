@@ -14,16 +14,27 @@ import {
 import { type AdapterAccount } from "next-auth/adapters";
 import crypto from "crypto";
 
-export type FieldOptions = {
-  options: {
-    positionIndex: number;
-    label: string;
-  }[];
-};
+export type FieldOptions =
+  | { optionType: "text"; paragraph: boolean }
+  | {
+      optionType: "multipleChoice";
+      type: "radio" | "checkbox";
+      options: string[];
+    }
+  | {
+      optionType: "scale";
+      low: number;
+      high: number;
+      lowLabel: string;
+      highLabel: string;
+    }
+  | { optionType: "date"; includeTime: boolean; includeYear: boolean }
+  | { optionType: "time"; duration: boolean } // is the question an elapsed time or time of day
+  | { optionType: "fileUpload" };
 
-export const defaultFieldOptions: FieldOptions = {
-  options: [],
-};
+// export const defaultFieldOptions: FieldOptions = {
+//   options: [],
+// };
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -51,6 +62,8 @@ export const users = createTable("user", {
     withTimezone: true,
   }).default(sql`CURRENT_TIMESTAMP`),
   image: varchar("image", { length: 255 }),
+  googleAccessToken: varchar("google_access_token"),
+  googleRefreshToken: varchar("google_refresh_token"),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -128,7 +141,37 @@ export const userOrganizationsRelations = relations(
 );
 
 //* Form Fields
+export const formGroup = createTable(
+  "form_group",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generatePrefixedUUID("form_group")),
+    groupName: varchar("group_name"),
+    groupDescription: varchar("group_description"),
 
+    // Todo make this not null
+    organizationId: varchar("organization_id").references(
+      () => organizations.id,
+    ),
+  },
+  (formGroup) => ({
+    organizationIdIdx: index("form_group_organization_id_idx").on(
+      formGroup.organizationId,
+    ),
+  }),
+);
+
+export const formGroupRelations = relations(formGroup, ({ many, one }) => ({
+  forms: many(form),
+  organization: one(organizations, {
+    fields: [formGroup.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+// Corresponds to: https://developers.google.com/forms/api/reference/rest/v1/forms#Form
 export const form = createTable(
   "form",
   {
@@ -136,21 +179,36 @@ export const form = createTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("form")),
+    googleFormId: varchar("google_form_id", { length: 255 }).unique(),
+
+    // Used for fetching only new responses
+    responsesSyncedTimestamp: timestamp("responses_synced_timestamp", {
+      mode: "date",
+      withTimezone: true,
+    }),
     formName: varchar("form_name").notNull(),
     formDescription: varchar("form_description"),
     formOptions: json("form_options"),
-    boardId: varchar("board_id", { length: 255 })
+    boardId: varchar("board_id", { length: 255 }).references(() => boards.id),
+    formGroupId: varchar("form_group_id", { length: 255 }).references(
+      () => formGroup.id,
+    ),
+
+    // Todo make this not null
+    organizationId: varchar("organization_id").references(
+      () => organizations.id,
+    ),
+    // Refers to the person who authorized access to the form. Use their access token to make requests
+    ownerId: varchar("owner_id", { length: 255 })
       .notNull()
-      .references(() => boards.id),
-    organizationId: varchar("organization_id")
-      .notNull()
-      .references(() => organizations.id),
+      .references(() => users.id),
   },
   (form) => {
     return {
       organizationIdIdx: index("form_organization_id_idx").on(
         form.organizationId,
       ),
+      googleFormIdIdx: index("form_google_form_id_idx").on(form.googleFormId),
     };
   },
 );
@@ -162,100 +220,109 @@ export const formRelations = relations(form, ({ many, one }) => ({
     fields: [form.organizationId],
     references: [organizations.id],
   }),
-  // board: one(boards),
-  sections: many(formSections),
-}));
-
-export const formSections = createTable("form_sections", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => generatePrefixedUUID("section")),
-  formId: varchar("form_id", { length: 255 })
-    .notNull()
-    .references(() => form.id),
-  sectionName: varchar("section_name").notNull(),
-  sectionDescription: varchar("section_description"),
-  positionIndex: integer("section_index").notNull(), // Order of the section in the form just use numbers with lots of space between them
-});
-
-export const formSectionsRelations = relations(
-  formSections,
-  ({ one, many }) => ({
-    form: one(form, { fields: [formSections.formId], references: [form.id] }),
-    fields: many(formFields),
+  formGroup: one(formGroup, {
+    fields: [form.formGroupId],
+    references: [formGroup.id],
   }),
-);
+  owner: one(users, { fields: [form.ownerId], references: [users.id] }),
+}));
 
 export const fieldTypeEnum = pgEnum("field_type_enum", [
   "text",
   "multipleChoice",
+  "scale",
+  "date",
+  "time",
+  "fileUpload",
 ]);
 
-export const formFields = createTable("form_fields", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => generatePrefixedUUID("field")),
-  formId: varchar("form_id", { length: 255 })
-    .notNull()
-    .references(() => form.id),
-  sectionId: varchar("section_id", { length: 255 })
-    .notNull()
-    .references(() => formSections.id),
-  positionIndex: integer("position_index").notNull(), // Order of the field in the section
-  fieldName: varchar("field_name").notNull(),
-  fieldDescription: varchar("field_description"),
-  fieldType: fieldTypeEnum("field_type").notNull(),
-  fieldOptions: json("field_options")
-    .$type<FieldOptions>()
-    .notNull()
-    .default(defaultFieldOptions),
-  required: boolean("required").notNull().default(false),
-});
+// Corresponds to: https://developers.google.com/forms/api/reference/rest/v1/forms#Item
+export const formFields = createTable(
+  "form_fields",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generatePrefixedUUID("field")),
+    googleItemId: varchar("google_item_id", { length: 255 }),
+    formId: varchar("form_id", { length: 255 })
+      .notNull()
+      .references(() => form.id),
+
+    // Todo figure out what to do with position index
+    positionIndex: integer("position_index"), // Order of the field in the form
+    fieldName: varchar("field_name").notNull(),
+    fieldDescription: varchar("field_description"),
+    fieldType: fieldTypeEnum("field_type").notNull(),
+    // Value dependent on the field type
+    fieldOptions: json("field_options").$type<FieldOptions>().notNull(),
+    required: boolean("required").notNull().default(false),
+  },
+  (formFields) => ({
+    formIdIdx: index("form_fields_form_id_idx").on(formFields.formId),
+    googleItemIdIdx: index("form_fields_google_item_id_idx").on(
+      formFields.googleItemId,
+    ),
+  }),
+);
 
 export const formFieldsRelations = relations(formFields, ({ one }) => ({
   form: one(form, { fields: [formFields.formId], references: [form.id] }),
-  section: one(formSections, {
-    fields: [formFields.sectionId],
-    references: [formSections.id],
-  }),
 }));
 
-export const formStatusEnum = pgEnum("form_status_enum", [
-  "started",
-  "completed",
-  "submitted",
-]);
+//* unused
+// export const formStatusEnum = pgEnum("form_status_enum", [
+//   "started",
+//   "completed",
+//   "submitted",
+// ]);
 
 //* This is the key entity for the application system
-export const formResponse = createTable("form_responses", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => generatePrefixedUUID("response")),
-  // userId: varchar("user_id", { length: 255 }).notNull(), // todo create relation
-  formId: varchar("form_id")
-    .notNull()
-    .references(() => form.id),
-  columnId: varchar("column_id", { length: 255 })
-    .notNull()
-    .references(() => columns.id),
-  positionIndex: integer("position_index").notNull(), // Order of the response in the column
-  userId: varchar("user_id", { length: 255 })
-    .notNull()
-    .references(() => users.id),
-  status: formStatusEnum("status").notNull(),
-});
+export const formResponse = createTable(
+  "form_responses",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generatePrefixedUUID("response")),
+    googleResponseId: varchar("google_response_id", { length: 255 }),
 
-export const formResponseRelations = relations(formResponse, ({ one }) => ({
-  form: one(form, { fields: [formResponse.formId], references: [form.id] }),
-  user: one(users, { fields: [formResponse.userId], references: [users.id] }),
-  column: one(columns, {
-    fields: [formResponse.columnId],
-    references: [columns.id],
+    // userId: varchar("user_id", { length: 255 }).notNull(), // todo create relation
+
+    respondentEmail: varchar("respondent_email", { length: 255 }),
+
+    // Todo add last synced timestamp
+
+    formId: varchar("form_id")
+      .notNull()
+      .references(() => form.id),
+    columnId: varchar("column_id", { length: 255 })
+      // .notNull()
+      .references(() => columns.id),
+    userId: varchar("user_id", { length: 255 }).references(() => users.id),
+    // status: formStatusEnum("status").notNull(),
+  },
+  (formResponse) => ({
+    formIdIdx: index("form_responses_form_id_idx").on(formResponse.formId),
+    columnIdIdx: index("form_responses_column_id_idx").on(
+      formResponse.columnId,
+    ),
+    userIdIdx: index("form_responses_user_id_idx").on(formResponse.userId),
   }),
-}));
+);
+
+export const formResponseRelations = relations(
+  formResponse,
+  ({ one, many }) => ({
+    form: one(form, { fields: [formResponse.formId], references: [form.id] }),
+    user: one(users, { fields: [formResponse.userId], references: [users.id] }),
+    column: one(columns, {
+      fields: [formResponse.columnId],
+      references: [columns.id],
+    }),
+    formFieldResponses: many(formFieldResponse),
+  }),
+);
 
 export const formFieldResponse = createTable("form_field_responses", {
   id: varchar("id", { length: 255 })

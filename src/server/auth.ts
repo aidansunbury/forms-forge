@@ -1,3 +1,4 @@
+import { google } from "googleapis";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import {
   getServerSession,
@@ -40,13 +41,13 @@ declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
-      // ...other properties
+      googleAccessToken: string;
       organizations: OrgRelation[];
     } & DefaultSession["user"];
   }
 
   interface User {
-    testField?: string;
+    googleAccessToken: string;
     organizations: OrgRelation[];
   }
 }
@@ -65,6 +66,9 @@ export function CustomAdapter(
         where: (sessions, { eq }) => eq(sessions.sessionToken, sessionToken),
         with: {
           user: {
+            columns: {
+              googleRefreshToken: false,
+            },
             with: {
               organizations: {
                 with: {
@@ -89,6 +93,8 @@ export function CustomAdapter(
         user: test2.user,
       };
 
+      console.log("formatted", formatted);
+
       return formatted;
     },
   };
@@ -103,14 +109,40 @@ export function CustomAdapter(
  */
 export const authOptions: NextAuthOptions = {
   callbacks: {
-    session: ({ session, user }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: user.id,
-        organizations: user.organizations,
-      },
-    }),
+    session: ({ session, user }) => {
+      // console.log("session", session);
+      // console.log("user", user);
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          id: user.id,
+          googleAccessToken: user.googleAccessToken,
+          organizations: user.organizations,
+        },
+      };
+    },
+    signIn: async ({ account, profile, user, credentials, email }) => {
+      console.log("account", account);
+      // refresh 1//0fEoWA4OO3ZoiCgYIARAAGA8SNwF-L9IrvyQ9KI1kQlxgRe9Jrr8PmOom4uyhsXM1-m8A_VieyuLs8Y9GMOHLCEbkFHT7YPR4X7s
+      // access token ya29.a0AXooCgvsIGOIIT1xRj7vM7KvLRoaO25f383B_9GDOxbi7gLstg-KfWkWU2CGUTio-8y-9llV0jaymqLbKxwS4tKn78Wg05SlWx0ZlYgKFJ0YOvI8VtRnU6Fj9eKESQBIPL5sMESz99ZqEjNuL-Jx6JWp11REalIhsHbOaCgYKARESARESFQHGX2Mitw3fRzDtfELnJ9uzLTjHjg0171
+      // console.log("profile", profile);
+      console.log("user", user);
+
+      // google access tokens expire every hour
+
+      // Store tokens in db
+      await db
+        .update(users)
+        .set({
+          googleAccessToken: account?.access_token,
+          googleRefreshToken: account?.refresh_token,
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      return true;
+    },
   },
   adapter: CustomAdapter(db, {
     usersTable: users,
@@ -123,6 +155,17 @@ export const authOptions: NextAuthOptions = {
     Google({
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: [
+            "openid email profile",
+            "https://www.googleapis.com/auth/drive.file", // Add the Drive scope
+          ].join(" "),
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     }),
     /**
      * ...add more providers here.
