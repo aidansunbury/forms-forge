@@ -11,16 +11,16 @@ export default function Picker({ token }: { token: string | undefined }) {
       clientId:
         "1019712694717-2a6u9d71s48tggkub2ka3ppdrgok9dtr.apps.googleusercontent.com",
       developerKey: "",
-      // viewId: "FORMS"
+      viewId: "FORMS",
       setOrigin: "http://localhost:3000",
       appId: "1019712694717",
 
       token: token, // pass oauth token in case you already have one
-      showUploadView: true,
-      showUploadFolders: true,
+      showUploadView: false,
+      showUploadFolders: false,
       supportDrives: true,
-      setIncludeFolders: true,
-      setSelectFolderEnabled: true,
+      // setIncludeFolders: true,
+      // setSelectFolderEnabled: true,
 
       multiselect: true,
       // customViews: customViewsArray, // custom view

@@ -1,3 +1,4 @@
+import { create } from "domain";
 import { z } from "zod";
 
 import {
@@ -20,12 +21,15 @@ import {
   boards,
   formFields,
   formResponse as formResponseDBSchema,
+  formFieldResponse,
   type FieldOptions,
 } from "@/server/db/schema";
 import { TRPCError } from "@trpc/server";
 
 import { google } from "googleapis";
 import { env } from "@/env";
+
+import { logger } from "../utils/logger";
 
 type SimplifiedType =
   | "text"
@@ -74,73 +78,16 @@ function getQuestionOptions(type: SimplifiedType, data: any): FieldOptions {
       options: data.options.map((option: any) => option.value),
     };
   }
+  if (type === "fileUpload") {
+    return {
+      optionType: "fileUpload",
+    };
+  }
+
   throw new Error("Unknown question type");
 }
 
 export const formRouter = createTRPCRouter({
-  create: orgScopedProcedure("admin")
-    .input(withOrgId)
-    .mutation(async ({ input, ctx }) => {
-      try {
-        const formTransaction = await db.transaction(async (trx) => {
-          const [newBoard] = await trx.insert(boards).values({}).returning();
-
-          if (!newBoard) {
-            throw new Error("Failed to create new board");
-          }
-
-          const [newForm] = await trx
-            .insert(form)
-            .values({
-              organizationId: input.orgId,
-              boardId: newBoard.id,
-              formName: "New Form",
-            })
-            .returning();
-
-          if (!newForm) {
-            throw new Error("Failed to create new form");
-          }
-          // Create parent section
-          const [newParentSection] = await trx
-            .insert(formSections)
-            .values({
-              formId: newForm.id,
-              sectionName: "Parent Section",
-              positionIndex: 0, // Always first
-            })
-            .returning();
-
-          if (!newParentSection) {
-            throw new Error("Failed to create parent section");
-          }
-
-          // Create a default field
-
-          const [newField] = await trx
-            .insert(formFields)
-            .values({
-              formId: newForm.id,
-              sectionId: newParentSection.id,
-              fieldName: "New Field",
-              fieldType: "text",
-              positionIndex: 0,
-            })
-            .returning();
-
-          return newForm;
-        });
-
-        return formTransaction;
-      } catch (error) {
-        console.log(error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create form",
-        });
-      }
-    }),
-
   // Returns a form with all fields properly ordered
   getFormWithFields: orgScopedProcedure("member")
     .input(withOrgId.extend({ formId: z.string() }))
@@ -166,215 +113,154 @@ export const formRouter = createTRPCRouter({
       }
       return formWithFields;
     }),
-  // Just create / update a form field for now
-  addField: orgScopedProcedure("admin")
-    .input(withOrgId.merge(AddFieldSchema))
-    .mutation(async ({ input }) => {
-      try {
-        // Todo ensure that json is in correct format
-        const newField = await db.insert(formFields).values(input).returning();
-        return newField;
-      } catch (error) {
-        console.log(error);
-        return error;
-      }
-    }),
-  removeField: protectedProcedure
-    .input(RemoveFieldSchema)
-    .mutation(async ({ input }) => {
-      try {
-        const deletedField = await db
-          .delete(formFields)
-          .where(eq(formFields.id, input.fieldId))
-          .returning();
-        return deletedField;
-      } catch (error) {
-        console.log(error);
-        return error;
-      }
-    }),
-
-  updateForm: protectedProcedure
-    .input(formUpdateSchema.array())
-    .mutation(async ({ input }) => {
-      try {
-        const updates = [];
-        for (const update of input) {
-          if (update.type === "field") {
-            console.log(update);
-
-            const { id, ...data } = update.data;
-
-            const result = await db
-              .update(formFields)
-              .set(data)
-              .where(eq(formFields.id, update.data.id as string))
-              .returning();
-            updates.push(result);
-          } else if (update.type === "form") {
-            const { id, ...data } = update.data;
-            updates.push(
-              await db
-                .update(form)
-                .set(data)
-                .where(eq(form.id, id as string))
-                .returning(),
-            );
-          } else if (update.type === "new") {
-            updates.push(
-              await db.insert(formFields).values(update.data).returning(),
-            );
-          } else if (update.type === "delete") {
-            console.log(update);
-            updates.push(
-              await db
-                .delete(formFields)
-                .where(eq(formFields.id, update.data.id))
-                .returning(),
-            );
-          }
-        }
-        return updates;
-      } catch (error) {
-        console.log(error);
-        return error;
-      }
-    }),
 
   syncForm: protectedProcedure
     .input(
       z.object({
         formId: z.string(),
+        initialSync: z.boolean(),
       }),
     )
     .query(async ({ ctx, input }) => {
+      // 1. Fetch form from google
       const client = new google.auth.OAuth2({
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       });
 
-      // Todo this eventually needs to be the existing owner
-      const userToken = await ctx.db.query.users.findFirst({
-        where: (user) => eq(user.id, ctx.session.user.id),
-      });
+      let formOwner;
+      let responseAfterTimestamp = new Date(0).toISOString();
 
-      console.log(userToken);
-
-      if (!userToken) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "User not found",
+      if (input.initialSync) {
+        formOwner = await ctx.db.query.users.findFirst({
+          where: (user) => eq(user.id, ctx.session.user.id),
         });
-      }
-
-      client.setCredentials({
-        access_token: userToken.googleAccessToken,
-        refresh_token: userToken.googleRefreshToken,
-      });
-
-      // Fetch the form from google
-      const forms = await google.forms({ version: "v1", auth: client });
-      const formResponse = await forms.forms.get({ formId: input.formId });
-      if (!formResponse.data) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Form not found",
-        });
-      }
-
-      // Sync the form with the database
-
-      // 1. Check if the form exists in the database
-      const existingForm = await db.query.form.findFirst({
-        where: (form) => eq(form.googleFormId, input.formId),
-        with: {
-          formFields: true,
-          formResponses: true,
-        },
-      });
-
-      let formId = "";
-      const fieldIdSet = new Set<string>(); // Set of existing field ids
-      const responseIdSet = new Set<string>(); // Set of existing response ids
-
-      if (!existingForm) {
-        // Create a new form
-        const [newForm] = await db
-          .insert(form)
-          .values({
-            googleFormId: input.formId,
-            formName: formResponse.data.info?.documentTitle ?? "Untitled Form",
-            formDescription: formResponse.data.info?.description ?? "",
-            ownerId: ctx.session.user.id,
-          })
-          .returning();
-
-        if (!newForm) {
+        if (!formOwner) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create form",
+            message: `User with id ${ctx.session.user.id} not found`,
           });
         }
-        formId = newForm.id;
       } else {
-        formId = existingForm.id;
-        for (const field of existingForm.formFields ?? []) {
-          console.log("Form already has field: " + field.googleItemId);
-          fieldIdSet.add(field.googleItemId ?? "");
+        const form = await db.query.form.findFirst({
+          where: (form) => eq(form.googleFormId, input.formId),
+          with: {
+            owner: true,
+          },
+        });
+        if (!form || !form.owner) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Form with id ${input.formId} not found or has no owner`,
+          });
         }
 
-        for (const response of existingForm.formResponses ?? []) {
-          console.log(
-            "Form already has response: " + response.googleResponseId,
-          );
-          responseIdSet.add(response.googleResponseId ?? "");
-        }
+        responseAfterTimestamp = form.lastSyncedTimestamp.toISOString();
+        formOwner = form.owner;
+      }
+      client.setCredentials({
+        access_token: formOwner.googleAccessToken,
+        refresh_token: formOwner.googleRefreshToken,
+      });
 
-        // Update form name and description
-        await db
-          .update(form)
-          .set({
-            formName: formResponse.data.info?.documentTitle ?? "Untitled Form",
-            formDescription: formResponse.data.info?.description ?? "",
-          })
-          .where(eq(form.id, formId));
+      const forms = google.forms({ version: "v1", auth: client });
+
+      logger.debug(`Getting responses after ${responseAfterTimestamp}`);
+
+      const formResponsesPromise = forms.forms.responses.list({
+        formId: input.formId,
+        filter: `timestamp >= ${responseAfterTimestamp}`,
+      });
+
+      const formResponseFromGoogle = await forms.forms.get({
+        formId: input.formId,
+      });
+      if (!formResponseFromGoogle.data) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Form with google id ${input.formId} not found`,
+        });
       }
 
-      // 2. Sync the form fields
+      // 2. Update the form information
+      const [updatedForm] = await db
+        .insert(form)
+        .values({
+          googleFormId: input.formId,
+          formName: formResponseFromGoogle.data.info?.title ?? "Untitled Form",
+          formDriveName:
+            formResponseFromGoogle.data.info?.documentTitle ?? "Untitled Form",
+          formDescription: formResponseFromGoogle.data.info?.description ?? "",
+          ownerId: formOwner.id,
+          lastSyncedTimestamp: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: form.googleFormId,
+          set: {
+            formName:
+              formResponseFromGoogle.data.info?.documentTitle ??
+              "Untitled Form",
+            formDriveName:
+              formResponseFromGoogle.data.info?.title ?? "Untitled Form",
+            formDescription:
+              formResponseFromGoogle.data.info?.description ?? "",
+            lastSyncedTimestamp: new Date(),
+          },
+        })
+        .returning();
+
+      if (!updatedForm) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update form",
+        });
+      }
+
+      const formId = updatedForm.id;
+
+      // 3. Sync the form fields
       // we need to be able to handle deletes anyways so just fetch all the fields
-      for (const field of formResponse.data.items ?? []) {
+      const fieldWrites: Promise<any>[] = [];
+
+      for (const [index, field] of (
+        formResponseFromGoogle.data.items ?? []
+      ).entries()) {
         if (!field.questionItem || !field.questionItem.question) {
-          console.log("Skipping non question item");
+          logger.debug("Skipping non question field");
           continue;
         }
         const question = field.questionItem.question;
         const { type: questionType, options } =
           getQuestionTypeAndData(question);
 
-        if (fieldIdSet.has(field.itemId ?? "")) {
-          // Todo Update the field
-          console.log(`Updating field google id: ${field.itemId}`);
-          continue;
-        }
-
-        console.log("Creating new field with google id: " + field.itemId);
+        logger.debug(`Processing field ${field.itemId} on form ${formId}`);
         // Create a new field
-        const [newField] = await db
+        const fieldData = {
+          googleItemId: field.itemId,
+          fieldName: field.title ?? "Untitled Field",
+          fieldType: questionType,
+          fieldOptions: getQuestionOptions(questionType, options),
+          formId,
+          positionIndex: index,
+        };
+
+        const newField = db
           .insert(formFields)
-          .values({
-            googleItemId: field.itemId,
-            fieldName: field.title ?? "Untitled Field",
-            fieldType: questionType,
-            fieldOptions: getQuestionOptions(questionType, options),
-            formId,
+          .values(fieldData)
+          .onConflictDoUpdate({
+            target: formFields.googleItemId,
+            set: fieldData,
           })
           .returning();
+
+        fieldWrites.push(newField);
       }
 
-      // 3. Sync the form responses
-      const formResponses = await forms.forms.responses.list({
-        formId: input.formId,
-      });
+      const updatedFields = await Promise.all(fieldWrites);
+      logger.debug(`Updated ${updatedFields.length} fields`);
+
+      // 4. Sync the form responses
+      const formResponses = await formResponsesPromise;
 
       if (!formResponses.data) {
         throw new TRPCError({
@@ -383,28 +269,97 @@ export const formRouter = createTRPCRouter({
         });
       }
 
-      // Sync the responses
-      for (const response of formResponses.data.responses ?? []) {
-        // Check if the response exists
-        if (responseIdSet.has(response.responseId ?? "")) {
-          console.log("Skipping existing response");
-          continue;
-        }
+      const responses = formResponses.data.responses ?? [];
 
-        // Create a new response
-        const [newResponse] = await db
+      logger.debug(
+        `Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
+      );
+
+      const responsePromises = responses.map(async (response) => {
+        const updateData = {
+          googleResponseId: response.responseId,
+          formId,
+          respondentEmail: response.respondentEmail,
+        };
+
+        const [createdResponse] = await db
           .insert(formResponseDBSchema)
-          .values({
-            googleResponseId: response.responseId,
-            formId,
-            respondentEmail: response.respondentEmail,
+          .values(updateData)
+          .onConflictDoUpdate({
+            target: [
+              formResponseDBSchema.googleResponseId,
+              formResponseDBSchema.formId,
+            ],
+            set: updateData,
           })
           .returning();
 
-        // Sync the answers
-      }
+        if (!createdResponse) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to create response with google id ${response.responseId} for form ${formId}`,
+          });
+        }
+        logger.debug(`Created/Updated response ${createdResponse.id}`);
 
-      return formResponse;
+        if (!response.answers) {
+          return;
+        }
+
+        // Sync the answers in a given response
+        const answerPromises = Object.entries(response.answers).map(
+          async ([questionId, responseData]) => {
+            if (!responseData.textAnswers?.answers) {
+              logger.debug("Skipping non text answer");
+              return;
+            }
+
+            const data = {
+              response: responseData.textAnswers.answers.reduce(
+                (acc, answer) => {
+                  return acc + answer.value;
+                },
+                "",
+              ),
+              formResponseId: createdResponse.id,
+              googleQuestionId: questionId,
+            };
+
+            const [createdFieldResponse] = await db
+              .insert(formFieldResponse)
+              .values(data)
+              .onConflictDoUpdate({
+                target: [
+                  formFieldResponse.googleQuestionId,
+                  formFieldResponse.formResponseId,
+                ],
+                set: data,
+              })
+              .returning();
+
+            if (!createdFieldResponse) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: `Failed to create field response for form response ${createdResponse.id}`,
+              });
+            }
+
+            return createdFieldResponse;
+          },
+        );
+
+        // Await all the answer updates concurrently for this response
+        const result = await Promise.all(answerPromises);
+        logger.debug(
+          `Updated ${result.length} answers for response ${createdResponse.id}`,
+        );
+      });
+
+      // Await all the response updates concurrently
+      const result = await Promise.all(responsePromises);
+      logger.debug(`Updated ${result.length} responses for form ${formId}`);
+
+      return formResponseFromGoogle;
     }),
   getFile: protectedProcedure
     .input(z.object({ fileId: z.string() }))

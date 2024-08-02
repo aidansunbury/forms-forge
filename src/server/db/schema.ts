@@ -10,9 +10,11 @@ import {
   json,
   pgEnum,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "next-auth/adapters";
 import crypto from "crypto";
+import { google } from "googleapis";
 
 export type FieldOptions =
   | { optionType: "text"; paragraph: boolean }
@@ -182,11 +184,12 @@ export const form = createTable(
     googleFormId: varchar("google_form_id", { length: 255 }).unique(),
 
     // Used for fetching only new responses
-    responsesSyncedTimestamp: timestamp("responses_synced_timestamp", {
+    lastSyncedTimestamp: timestamp("responses_synced_timestamp", {
       mode: "date",
       withTimezone: true,
-    }),
+    }).notNull(),
     formName: varchar("form_name").notNull(),
+    formDriveName: varchar("form_drive_name").notNull(),
     formDescription: varchar("form_description"),
     formOptions: json("form_options"),
     boardId: varchar("board_id", { length: 255 }).references(() => boards.id),
@@ -244,13 +247,12 @@ export const formFields = createTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("field")),
-    googleItemId: varchar("google_item_id", { length: 255 }),
+    googleItemId: varchar("google_item_id", { length: 255 }).unique(),
     formId: varchar("form_id", { length: 255 })
       .notNull()
       .references(() => form.id),
-
-    // Todo figure out what to do with position index
-    positionIndex: integer("position_index"), // Order of the field in the form
+    // Ensures that fields are ordered correctly based on order received from Google
+    positionIndex: integer("position_index"),
     fieldName: varchar("field_name").notNull(),
     fieldDescription: varchar("field_description"),
     fieldType: fieldTypeEnum("field_type").notNull(),
@@ -266,8 +268,9 @@ export const formFields = createTable(
   }),
 );
 
-export const formFieldsRelations = relations(formFields, ({ one }) => ({
+export const formFieldsRelations = relations(formFields, ({ one, many }) => ({
   form: one(form, { fields: [formFields.formId], references: [form.id] }),
+  formFieldResponses: many(formFieldResponse),
 }));
 
 //* unused
@@ -291,7 +294,10 @@ export const formResponse = createTable(
 
     respondentEmail: varchar("respondent_email", { length: 255 }),
 
-    // Todo add last synced timestamp
+    lastSyncedTimestamp: timestamp("last_synced_timestamp", {
+      mode: "date",
+      withTimezone: true,
+    }),
 
     formId: varchar("form_id")
       .notNull()
@@ -304,10 +310,11 @@ export const formResponse = createTable(
   },
   (formResponse) => ({
     formIdIdx: index("form_responses_form_id_idx").on(formResponse.formId),
-    columnIdIdx: index("form_responses_column_id_idx").on(
-      formResponse.columnId,
-    ),
     userIdIdx: index("form_responses_user_id_idx").on(formResponse.userId),
+    uniqueResponseConstraint: uniqueIndex("unique_form_response_constraint").on(
+      formResponse.googleResponseId,
+      formResponse.formId,
+    ),
   }),
 );
 
@@ -324,19 +331,35 @@ export const formResponseRelations = relations(
   }),
 );
 
-export const formFieldResponse = createTable("form_field_responses", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => generatePrefixedUUID("field_response  ")),
-  formResponseId: varchar("form_response_id", { length: 255 })
-    .notNull()
-    .references(() => formResponse.id),
-  formFieldId: varchar("form_field_id", { length: 255 })
-    .notNull()
-    .references(() => formFields.id),
-  response: text("response"),
-});
+export const formFieldResponse = createTable(
+  "form_field_responses",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generatePrefixedUUID("field_response  ")),
+    googleQuestionId: varchar("google_question_id", { length: 255 }),
+    formResponseId: varchar("form_response_id", { length: 255 })
+      .notNull()
+      .references(() => formResponse.id),
+    formFieldId: varchar("form_field_id", { length: 255 })
+      // .notNull()
+      .references(() => formFields.id),
+    response: text("response"),
+  },
+  (formFieldResponse) => ({
+    formResponseIdIdx: index("form_field_responses_form_response_id_idx").on(
+      formFieldResponse.formResponseId,
+    ),
+    googleQuestionIdIdx: index(
+      "form_field_responses_google_question_id_idx",
+    ).on(formFieldResponse.googleQuestionId),
+
+    uniqueResponseConstraint: uniqueIndex(
+      "unique_form_field_response_constraint",
+    ).on(formFieldResponse.googleQuestionId, formFieldResponse.formResponseId),
+  }),
+);
 
 export const formFieldResponseRelations = relations(
   formFieldResponse,
