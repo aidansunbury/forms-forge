@@ -114,6 +114,34 @@ export const formRouter = createTRPCRouter({
       return formWithFields;
     }),
 
+  // Does not return the form fields, designed for the form list view
+  getMyForms: protectedProcedure.query(async ({ ctx }) => {
+    const forms = await db.query.form.findMany({
+      where: (form) => eq(form.ownerId, ctx.session.user.id),
+    });
+    return forms;
+  }),
+
+  getForm: protectedProcedure
+    .input(z.object({ formId: z.string() }))
+    .query(async ({ input }) => {
+      const retrievedForm = await db.query.form.findFirst({
+        where: eq(form.id, input.formId),
+        with: {
+          formFields: {
+            orderBy: asc(formFields.positionIndex),
+          },
+        },
+      });
+      if (!retrievedForm) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Form with id ${input.formId} not found`,
+        });
+      }
+      return retrievedForm;
+    }),
+
   syncForm: protectedProcedure
     .input(
       z.object({

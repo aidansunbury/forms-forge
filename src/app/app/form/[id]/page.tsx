@@ -25,17 +25,15 @@ export const FormView = async ({
 }) => {
   const session = await getServerAuthSession();
 
-  const org = await orgMember(session, params.organization);
+  // const org = await orgMember(session, params.organization);
 
   try {
-    const formData = await api.form.getFormWithFields({
+    const formData = await api.form.getForm({
       formId: params.id,
-      orgId: org.organizationId,
     });
 
     return (
       <div className="flex w-full flex-col items-center">
-
         {/* Nav Menu */}
         <NavigationMenu>
           <NavigationMenuList>
@@ -65,7 +63,7 @@ export const FormView = async ({
           </NavigationMenuList>
         </NavigationMenu>
 
-        <FormViewer formData={formData} />
+        {JSON.stringify(formData)}
       </div>
     );
   } catch (error) {
