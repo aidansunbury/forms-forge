@@ -34,7 +34,17 @@ export type FieldOptions =
     }
   | { optionType: "date"; includeTime: boolean; includeYear: boolean }
   | { optionType: "time"; duration: boolean } // is the question an elapsed time or time of day
-  | { optionType: "fileUpload" };
+  | { optionType: "fileUpload"; folderId: string }
+  | {
+      optionType: "grid";
+      rowQuestion: string;
+      grid: {
+        columns: {
+          type: "radio" | "checkbox";
+          options: string[];
+        };
+      };
+    };
 
 // export const defaultFieldOptions: FieldOptions = {
 //   options: [],
@@ -242,6 +252,7 @@ export const fieldTypeEnum = pgEnum("field_type_enum", [
   "date",
   "time",
   "fileUpload",
+  "grid",
 ]);
 
 // Corresponds to: https://developers.google.com/forms/api/reference/rest/v1/forms#Item
@@ -252,12 +263,15 @@ export const formFields = createTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("field")),
-    googleQuestionId: varchar("google_item_id", { length: 255 }).unique(),
+    googleItemId: varchar("google_item_id", { length: 255 }),
+    googleQuestionId: varchar("google_question_id", { length: 255 }).unique(),
     formId: varchar("form_id", { length: 255 })
       .notNull()
       .references(() => form.id),
     // Ensures that fields are ordered correctly based on order received from Google
     positionIndex: integer("position_index"),
+    // Used for grid questions
+    positionSubIndex: integer("position_sub_index"),
     fieldName: varchar("field_name").notNull(),
     fieldDescription: varchar("field_description"),
     fieldType: fieldTypeEnum("field_type").notNull(),
@@ -267,7 +281,7 @@ export const formFields = createTable(
   },
   (formFields) => ({
     formIdIdx: index("form_fields_form_id_idx").on(formFields.formId),
-    googleQuestionIdIdx: index("form_fields_google_item_id_idx").on(
+    googleQuestionIdIdx: index("form_fields_google_question_id_idx").on(
       formFields.googleQuestionId,
     ),
   }),
@@ -336,6 +350,12 @@ export const formResponseRelations = relations(
   }),
 );
 
+type FileResponse = {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+};
+
 export const formFieldResponse = createTable(
   "form_field_responses",
   {
@@ -354,7 +374,8 @@ export const formFieldResponse = createTable(
     formFieldId: varchar("form_field_id", { length: 255 })
       .notNull()
       .references(() => formFields.googleQuestionId),
-    response: text("response"),
+    response: varchar("response").array(),
+    fileResponse: json("file_response").$type<FileResponse>().array(),
   },
   (formFieldResponse) => ({
     formResponseIdIdx: index("form_field_responses_form_response_id_idx").on(
