@@ -4,7 +4,9 @@ import React from "react";
 import { api } from "@/trpc/react";
 
 const Questions = async ({ params }: { params: { id: string } }) => {
-  const form = await api.form.getForm.useSuspenseQuery({ formId: params.id });
+  const form = await api.form.getFormByFields.useSuspenseQuery({
+    formId: params.id,
+  });
 
   return (
     <div>

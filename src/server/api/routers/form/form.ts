@@ -42,7 +42,8 @@ export const formRouter = createTRPCRouter({
     return forms;
   }),
 
-  getForm: protectedProcedure
+  // Form > FormFields > FormFieldResponses
+  getFormByFields: protectedProcedure
     .input(z.object({ formId: z.string() }))
     .query(async ({ input }) => {
       const retrievedForm = await db.query.form.findFirst({
@@ -53,6 +54,40 @@ export const formRouter = createTRPCRouter({
               formFieldResponses: true,
             },
             orderBy: asc(formFields.positionIndex),
+          },
+        },
+      });
+      if (!retrievedForm) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Form with id ${input.formId} not found`,
+        });
+      }
+      return retrievedForm;
+    }),
+
+  // Form > Responses > FormFieldResponses > FormField
+  getFormByResponses: protectedProcedure
+    .input(z.object({ formId: z.string() }))
+    .query(async ({ input }) => {
+      const retrievedForm = await db.query.form.findFirst({
+        where: eq(form.id, input.formId),
+        with: {
+          formResponses: {
+            with: {
+              formFieldResponses: {
+                with: {
+                  formField: {
+                    columns: {
+                      fieldName: true,
+                      fieldType: true,
+                      // positionIndex: true,
+                    },
+                  },
+                },
+                // orderBy: asc(formFieldResponse.),
+              },
+            },
           },
         },
       });
