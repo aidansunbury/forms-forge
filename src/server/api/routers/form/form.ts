@@ -15,10 +15,9 @@ import {
 } from "@/lib/validators";
 
 import { db } from "@/server/db";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, InferInsertModel } from "drizzle-orm";
 import {
   form,
-  boards,
   formFields,
   formResponse as formResponseDBSchema,
   formFieldResponse,
@@ -28,68 +27,11 @@ import { TRPCError } from "@trpc/server";
 
 import { google } from "googleapis";
 import { env } from "@/env";
+import { getQuestionTypeAndData, getQuestionOptions } from "./formHelpers";
 
-import { logger } from "../utils/logger";
-import test from "node:test";
+import { logger } from "../../utils/logger";
 
 // Question group items are the "checkbox grid" type of question
-
-type SimplifiedType =
-  | "text"
-  | "multipleChoice"
-  | "multipleChoiceGrid"
-  | "scale"
-  | "date"
-  | "time"
-  | "fileUpload";
-
-type TypeAndOptions = {
-  type: SimplifiedType;
-  options: any;
-};
-
-function getQuestionTypeAndData(question: object): TypeAndOptions {
-  if ("choiceQuestion" in question) {
-    return { type: "multipleChoice", options: question.choiceQuestion };
-  } else if ("textQuestion" in question) {
-    return { type: "text", options: question.textQuestion };
-  } else if ("scaleQuestion" in question) {
-    return { type: "scale", options: question.scaleQuestion };
-  } else if ("dateQuestion" in question) {
-    return { type: "date", options: question.dateQuestion };
-  } else if ("timeQuestion" in question) {
-    return { type: "time", options: question.timeQuestion };
-  } else if ("fileUploadQuestion" in question) {
-    return { type: "fileUpload", options: question.fileUploadQuestion };
-  }
-
-  // This line ensures exhaustiveness checking
-  throw new Error("Unknown question type");
-}
-
-function getQuestionOptions(type: SimplifiedType, data: any): FieldOptions {
-  if (type === "text") {
-    console.log(data);
-    return {
-      optionType: "text",
-      paragraph: data.paragraph ?? false,
-    };
-  }
-  if (type === "multipleChoice") {
-    return {
-      optionType: "multipleChoice",
-      type: data.type,
-      options: data.options.map((option: any) => option.value),
-    };
-  }
-  if (type === "fileUpload") {
-    return {
-      optionType: "fileUpload",
-    };
-  }
-
-  throw new Error("Unknown question type");
-}
 
 export const formRouter = createTRPCRouter({
   // Does not return the form fields, designed for the form list view
@@ -124,7 +66,6 @@ export const formRouter = createTRPCRouter({
     }),
 
   // Todo Make sure does not error if incorrect value passed for initialSync
-  // Todo must all be in a transaction
   syncForm: protectedProcedure
     .input(
       z.object({
@@ -138,8 +79,6 @@ export const formRouter = createTRPCRouter({
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       });
-
-      // client.getAccessToken();
 
       let formOwner;
       let responseAfterTimestamp = new Date(0).toISOString();
@@ -180,6 +119,8 @@ export const formRouter = createTRPCRouter({
 
       logger.debug(`Getting responses after ${responseAfterTimestamp}`);
 
+      // todo remove me, just for testing
+      responseAfterTimestamp = new Date(0).toISOString();
       const formResponsesPromise = forms.forms.responses.list({
         formId: input.formId,
         filter: `timestamp >= ${responseAfterTimestamp}`,
@@ -189,8 +130,6 @@ export const formRouter = createTRPCRouter({
         formId: input.formId,
       });
 
-      console.log(formResponseFromGoogle);
-
       if (!formResponseFromGoogle.data) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -198,22 +137,22 @@ export const formRouter = createTRPCRouter({
         });
       }
 
-      const result = await db.transaction(async (db) => {
+      const result = await db.transaction(async (trx) => {
         // 2. Update the form information
-        const [updatedForm] = await db
+
+        const formData: InferInsertModel<typeof form> = {
+          googleFormId: input.formId,
+          formName: formResponseFromGoogle.data.info?.title ?? "Untitled Form",
+          formDriveName:
+            formResponseFromGoogle.data.info?.documentTitle ?? "Untitled Form",
+          formDescription: formResponseFromGoogle.data.info?.description ?? "",
+          ownerId: formOwner.id,
+          lastSyncedTimestamp: new Date(),
+        };
+
+        const [updatedForm] = await trx
           .insert(form)
-          .values({
-            googleFormId: input.formId,
-            formName:
-              formResponseFromGoogle.data.info?.title ?? "Untitled Form",
-            formDriveName:
-              formResponseFromGoogle.data.info?.documentTitle ??
-              "Untitled Form",
-            formDescription:
-              formResponseFromGoogle.data.info?.description ?? "",
-            ownerId: formOwner.id,
-            lastSyncedTimestamp: new Date(),
-          })
+          .values(formData)
           .onConflictDoUpdate({
             target: form.googleFormId,
             set: {
@@ -245,37 +184,63 @@ export const formRouter = createTRPCRouter({
         for (const [index, field] of (
           formResponseFromGoogle.data.items ?? []
         ).entries()) {
-          if (!field.questionItem || !field.questionItem.question) {
-            logger.debug("Skipping non question field");
+          if (field.questionGroupItem && field.questionGroupItem.grid) {
+            // Handle grid questions
+            let subIndex = 0;
+            for (const question of field.questionGroupItem.questions ?? []) {
+              const fieldData: InferInsertModel<typeof formFields> = {
+                googleItemId: field.itemId,
+                googleQuestionId: question.questionId,
+                fieldName: question.rowQuestion?.title || "Unnamed Field",
+                fieldType: "grid",
+                required: question.required || false,
+                formId,
+                positionIndex: index,
+                positionSubIndex: subIndex,
+                // Todo parse grid correctly
+                fieldOptions: field.questionGroupItem.grid,
+              };
+
+              const newField = trx
+                .insert(formFields)
+                .values(fieldData)
+                .onConflictDoUpdate({
+                  target: formFields.googleQuestionId,
+                  set: fieldData,
+                })
+                .returning();
+              subIndex++;
+              fieldWrites.push(newField);
+            }
             continue;
+          } else if (field.questionItem && field.questionItem.question) {
+            // Parse question type and options
+            const question = field.questionItem.question;
+            const { type: questionType, options } =
+              getQuestionTypeAndData(question);
+
+            // Create a new field
+            const fieldData: InferInsertModel<typeof formFields> = {
+              googleItemId: field.itemId,
+              googleQuestionId: field.questionItem.question.questionId,
+              fieldName: field.title ?? "Untitled Field",
+              fieldType: questionType,
+              fieldOptions: getQuestionOptions(questionType, options),
+              formId,
+              positionIndex: index,
+            };
+
+            const newField = trx
+              .insert(formFields)
+              .values(fieldData)
+              .onConflictDoUpdate({
+                target: formFields.googleQuestionId,
+                set: fieldData,
+              })
+              .returning();
+
+            fieldWrites.push(newField);
           }
-          const question = field.questionItem.question;
-          const { type: questionType, options } =
-            getQuestionTypeAndData(question);
-
-          logger.debug(
-            `Processing field ${field.questionItem.question.questionId} on form ${formId}`,
-          );
-          // Create a new field
-          const fieldData = {
-            googleQuestionId: field.questionItem.question.questionId,
-            fieldName: field.title ?? "Untitled Field",
-            fieldType: questionType,
-            fieldOptions: getQuestionOptions(questionType, options),
-            formId,
-            positionIndex: index,
-          };
-
-          const newField = db
-            .insert(formFields)
-            .values(fieldData)
-            .onConflictDoUpdate({
-              target: formFields.googleQuestionId,
-              set: fieldData,
-            })
-            .returning();
-
-          fieldWrites.push(newField);
         }
 
         const updatedFields = await Promise.all(fieldWrites);
@@ -298,13 +263,13 @@ export const formRouter = createTRPCRouter({
         );
 
         const responsePromises = responses.map(async (response) => {
-          const updateData = {
+          const updateData: InferInsertModel<typeof formResponseDBSchema> = {
             googleResponseId: response.responseId,
             formId,
             respondentEmail: response.respondentEmail,
           };
 
-          const [createdResponse] = await db
+          const [createdResponse] = await trx
             .insert(formResponseDBSchema)
             .values(updateData)
             .onConflictDoUpdate({
@@ -331,42 +296,39 @@ export const formRouter = createTRPCRouter({
           // Sync the answers in a given response
           const answerPromises = Object.entries(response.answers).map(
             async ([questionId, responseData]) => {
-              if (!responseData.textAnswers?.answers) {
-                logger.debug("Skipping non text answer");
-                return;
-              }
-
-              const data = {
-                response: responseData.textAnswers.answers.reduce(
-                  (acc, answer) => {
-                    return acc + answer.value;
-                  },
-                  "",
-                ),
+              const data: InferInsertModel<typeof formFieldResponse> = {
                 formResponseId: createdResponse.id,
-                googleQuestionId: questionId,
                 formFieldId: questionId,
+                googleQuestionId: questionId,
+                response: null,
+                fileResponse: null,
               };
-              try {
-                const [createdFieldResponse] = await db
-                  .insert(formFieldResponse)
-                  .values(data)
-                  .onConflictDoUpdate({
-                    target: [
-                      formFieldResponse.googleQuestionId,
-                      formFieldResponse.formResponseId,
-                    ],
-                    set: data,
-                  })
-                  .returning();
-                return createdFieldResponse;
-              } catch (e) {
-                console.log(e);
-                console.log("Response failed here");
 
-                // Todo syncing will fail because we don't support all question types
-                console.log(data);
+              if (responseData.fileUploadAnswers) {
+                // Handle file upload response
+                data.fileResponse =
+                  responseData.fileUploadAnswers.answers ?? [];
+              } else if (responseData.textAnswers) {
+                if (typeof responseData.textAnswers.answers === "string") {
+                  data.response = [responseData.textAnswers.answers];
+                } else if (responseData.textAnswers.answers !== undefined) {
+                  data.response = responseData.textAnswers.answers.map(
+                    (answer) => answer.value || "",
+                  );
+                }
               }
+              const [createdFieldResponse] = await trx
+                .insert(formFieldResponse)
+                .values(data)
+                .onConflictDoUpdate({
+                  target: [
+                    formFieldResponse.googleQuestionId,
+                    formFieldResponse.formResponseId,
+                  ],
+                  set: data,
+                })
+                .returning();
+              return createdFieldResponse;
             },
           );
 

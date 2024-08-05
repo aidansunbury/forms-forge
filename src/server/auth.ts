@@ -93,7 +93,7 @@ export function CustomAdapter(
         session.user.googleRefreshToken
       ) {
         // Get current time minus 1 minute for buffer
-        const now = new Date().getTime() - 60000;
+        const now = new Date().getTime() / 1000 - 60;
         if (now > session.user.googleAccessTokenExpires) {
           console.log("google access token expired");
           googleClient.setCredentials({
@@ -156,7 +156,8 @@ export const authOptions: NextAuthOptions = {
     },
     signIn: async ({ account, user }) => {
       // Store tokens in db
-      db.update(users)
+      await db
+        .update(users)
         .set({
           googleAccessToken: account?.access_token,
           googleAccessTokenExpires: account?.expires_at,
