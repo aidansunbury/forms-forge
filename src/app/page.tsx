@@ -25,7 +25,6 @@ export default async function Home() {
                 {session && <span>Logged in as {session.user?.name}</span>}
               </p>
               <SignInButton redirect="/app/dashboard" />
-              <Picker token={session?.user.googleAccessToken} />
             </div>
           </div>
         </div>

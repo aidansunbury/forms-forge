@@ -8,7 +8,7 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: "border",
+        default: "border hover:shadow-lg m-1 h-64 w-64",
         selected: "border-y-0 border-l-4 border-r-0 border-blue-400",
       },
     },

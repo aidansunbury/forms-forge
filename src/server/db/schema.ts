@@ -11,10 +11,12 @@ import {
   pgEnum,
   boolean,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "next-auth/adapters";
 import crypto from "crypto";
 import { google } from "googleapis";
+import { int } from "drizzle-orm/mysql-core";
 
 export type FieldOptions =
   | { optionType: "text"; paragraph: boolean }
@@ -65,6 +67,9 @@ export const users = createTable("user", {
   }).default(sql`CURRENT_TIMESTAMP`),
   image: varchar("image", { length: 255 }),
   googleAccessToken: varchar("google_access_token"),
+  googleAccessTokenExpires: bigint("google_access_token_expires", {
+    mode: "number",
+  }),
   googleRefreshToken: varchar("google_refresh_token"),
 });
 
@@ -247,7 +252,7 @@ export const formFields = createTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("field")),
-    googleItemId: varchar("google_item_id", { length: 255 }).unique(),
+    googleQuestionId: varchar("google_item_id", { length: 255 }).unique(),
     formId: varchar("form_id", { length: 255 })
       .notNull()
       .references(() => form.id),
@@ -262,8 +267,8 @@ export const formFields = createTable(
   },
   (formFields) => ({
     formIdIdx: index("form_fields_form_id_idx").on(formFields.formId),
-    googleItemIdIdx: index("form_fields_google_item_id_idx").on(
-      formFields.googleItemId,
+    googleQuestionIdIdx: index("form_fields_google_item_id_idx").on(
+      formFields.googleQuestionId,
     ),
   }),
 );
@@ -339,12 +344,16 @@ export const formFieldResponse = createTable(
       .primaryKey()
       .$defaultFn(() => generatePrefixedUUID("field_response  ")),
     googleQuestionId: varchar("google_question_id", { length: 255 }),
+
+    // The overall response id
     formResponseId: varchar("form_response_id", { length: 255 })
       .notNull()
       .references(() => formResponse.id),
+
+    // References the google id of the response
     formFieldId: varchar("form_field_id", { length: 255 })
-      // .notNull()
-      .references(() => formFields.id),
+      .notNull()
+      .references(() => formFields.googleQuestionId),
     response: text("response"),
   },
   (formFieldResponse) => ({
@@ -370,7 +379,7 @@ export const formFieldResponseRelations = relations(
     }),
     formField: one(formFields, {
       fields: [formFieldResponse.formFieldId],
-      references: [formFields.id],
+      references: [formFields.googleQuestionId],
     }),
   }),
 );

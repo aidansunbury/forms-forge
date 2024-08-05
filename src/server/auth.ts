@@ -52,6 +52,11 @@ declare module "next-auth" {
   }
 }
 
+const googleClient = new google.auth.OAuth2({
+  clientId: env.GOOGLE_CLIENT_ID,
+  clientSecret: env.GOOGLE_CLIENT_SECRET,
+});
+
 // Used to include the user's organization roles in the session object.
 export function CustomAdapter(
   client: any, //PgDatabase<QueryResultHKT, any>,
@@ -62,13 +67,11 @@ export function CustomAdapter(
   const customAdapter = {
     ...originalAdapter,
     async getSessionAndUser(sessionToken: string) {
-      const test2 = await db.query.sessions.findFirst({
+      // Todo: turn this into a prepared statement
+      const session = await db.query.sessions.findFirst({
         where: (sessions, { eq }) => eq(sessions.sessionToken, sessionToken),
         with: {
           user: {
-            columns: {
-              googleRefreshToken: false,
-            },
             with: {
               organizations: {
                 with: {
@@ -80,22 +83,53 @@ export function CustomAdapter(
         },
       });
 
-      if (!test2) {
+      if (!session) {
         return null;
       }
 
-      const formatted = {
+      // Check for expired google access token
+      if (
+        session.user.googleAccessTokenExpires &&
+        session.user.googleRefreshToken
+      ) {
+        // Get current time minus 1 minute for buffer
+        const now = new Date().getTime() - 60000;
+        if (now > session.user.googleAccessTokenExpires) {
+          console.log("google access token expired");
+          googleClient.setCredentials({
+            refresh_token: session.user.googleRefreshToken,
+          });
+          const newAccessToken = await googleClient.refreshAccessToken();
+
+          if (newAccessToken.credentials.access_token) {
+            db.update(users)
+              .set({
+                googleAccessToken: newAccessToken.credentials.access_token,
+                googleAccessTokenExpires:
+                  newAccessToken.credentials.expiry_date,
+              })
+              .where(eq(users.id, session.userId))
+              .returning();
+
+            session.user.googleAccessToken =
+              newAccessToken.credentials.access_token;
+          }
+        }
+      }
+
+      // Remove sensitive data
+      session.user.googleRefreshToken = null;
+
+      const formattedSession = {
         session: {
-          sessionToken: test2.sessionToken,
-          expires: test2.expires,
-          userId: test2.userId,
+          sessionToken: session.sessionToken,
+          expires: session.expires,
+          userId: session.userId,
         },
-        user: test2.user,
+        user: session.user,
       };
 
-      console.log("formatted", formatted);
-
-      return formatted;
+      return formattedSession;
     },
   };
 
@@ -110,8 +144,6 @@ export function CustomAdapter(
 export const authOptions: NextAuthOptions = {
   callbacks: {
     session: ({ session, user }) => {
-      // console.log("session", session);
-      // console.log("user", user);
       return {
         ...session,
         user: {
@@ -122,20 +154,12 @@ export const authOptions: NextAuthOptions = {
         },
       };
     },
-    signIn: async ({ account, profile, user, credentials, email }) => {
-      console.log("account", account);
-      // refresh 1//0fEoWA4OO3ZoiCgYIARAAGA8SNwF-L9IrvyQ9KI1kQlxgRe9Jrr8PmOom4uyhsXM1-m8A_VieyuLs8Y9GMOHLCEbkFHT7YPR4X7s
-      // access token ya29.a0AXooCgvsIGOIIT1xRj7vM7KvLRoaO25f383B_9GDOxbi7gLstg-KfWkWU2CGUTio-8y-9llV0jaymqLbKxwS4tKn78Wg05SlWx0ZlYgKFJ0YOvI8VtRnU6Fj9eKESQBIPL5sMESz99ZqEjNuL-Jx6JWp11REalIhsHbOaCgYKARESARESFQHGX2Mitw3fRzDtfELnJ9uzLTjHjg0171
-      // console.log("profile", profile);
-      console.log("user", user);
-
-      // google access tokens expire every hour
-
+    signIn: async ({ account, user }) => {
       // Store tokens in db
-      await db
-        .update(users)
+      db.update(users)
         .set({
           googleAccessToken: account?.access_token,
+          googleAccessTokenExpires: account?.expires_at,
           googleRefreshToken: account?.refresh_token,
         })
         .where(eq(users.id, user.id))

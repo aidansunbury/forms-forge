@@ -2,18 +2,19 @@
 import useDrivePicker from "react-google-drive-picker";
 import { useSession } from "next-auth/react";
 import { api } from "@/trpc/react";
+import { env } from "@/env";
 
 export default function Picker({ token }: { token: string | undefined }) {
   const [openPicker, authResponse] = useDrivePicker();
+  const session = useSession();
 
   const handleOpenPicker = () => {
     openPicker({
-      clientId:
-        "1019712694717-2a6u9d71s48tggkub2ka3ppdrgok9dtr.apps.googleusercontent.com",
+      clientId: env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
       developerKey: "",
       viewId: "FORMS",
       setOrigin: "http://localhost:3000",
-      appId: "1019712694717",
+      appId: env.NEXT_PUBLIC_GOOGLE_APP_ID,
 
       token: token, // pass oauth token in case you already have one
       showUploadView: false,

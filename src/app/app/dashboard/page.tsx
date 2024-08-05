@@ -27,7 +27,7 @@ export default async function Dashboard() {
   return (
     <div className="m-2 p-2">
       <h1>Dashboard</h1>
-      <div className="flex w-full flex-row flex-wrap border">
+      <div className="flex w-full flex-row flex-wrap">
         <FormsList forms={myForms} />
         <ImportForm />
       </div>

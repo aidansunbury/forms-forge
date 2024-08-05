@@ -30,10 +30,14 @@ import { google } from "googleapis";
 import { env } from "@/env";
 
 import { logger } from "../utils/logger";
+import test from "node:test";
+
+// Question group items are the "checkbox grid" type of question
 
 type SimplifiedType =
   | "text"
   | "multipleChoice"
+  | "multipleChoiceGrid"
   | "scale"
   | "date"
   | "time"
@@ -88,32 +92,6 @@ function getQuestionOptions(type: SimplifiedType, data: any): FieldOptions {
 }
 
 export const formRouter = createTRPCRouter({
-  // Returns a form with all fields properly ordered
-  getFormWithFields: orgScopedProcedure("member")
-    .input(withOrgId.extend({ formId: z.string() }))
-    .query(async ({ input }) => {
-      const formWithFields = await db.query.form.findFirst({
-        where: eq(form.id, input.formId),
-        with: {
-          sections: {
-            orderBy: asc(formSections.positionIndex),
-            with: {
-              fields: {
-                orderBy: asc(formFields.positionIndex),
-              },
-            },
-          },
-        },
-      });
-      if (!formWithFields) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `Form with id ${input.formId} not found`,
-        });
-      }
-      return formWithFields;
-    }),
-
   // Does not return the form fields, designed for the form list view
   getMyForms: protectedProcedure.query(async ({ ctx }) => {
     const forms = await db.query.form.findMany({
@@ -129,6 +107,9 @@ export const formRouter = createTRPCRouter({
         where: eq(form.id, input.formId),
         with: {
           formFields: {
+            with: {
+              formFieldResponses: true,
+            },
             orderBy: asc(formFields.positionIndex),
           },
         },
@@ -142,6 +123,8 @@ export const formRouter = createTRPCRouter({
       return retrievedForm;
     }),
 
+  // Todo Make sure does not error if incorrect value passed for initialSync
+  // Todo must all be in a transaction
   syncForm: protectedProcedure
     .input(
       z.object({
@@ -149,12 +132,14 @@ export const formRouter = createTRPCRouter({
         initialSync: z.boolean(),
       }),
     )
-    .query(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       // 1. Fetch form from google
       const client = new google.auth.OAuth2({
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       });
+
+      // client.getAccessToken();
 
       let formOwner;
       let responseAfterTimestamp = new Date(0).toISOString();
@@ -203,6 +188,9 @@ export const formRouter = createTRPCRouter({
       const formResponseFromGoogle = await forms.forms.get({
         formId: input.formId,
       });
+
+      console.log(formResponseFromGoogle);
+
       if (!formResponseFromGoogle.data) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -210,184 +198,192 @@ export const formRouter = createTRPCRouter({
         });
       }
 
-      // 2. Update the form information
-      const [updatedForm] = await db
-        .insert(form)
-        .values({
-          googleFormId: input.formId,
-          formName: formResponseFromGoogle.data.info?.title ?? "Untitled Form",
-          formDriveName:
-            formResponseFromGoogle.data.info?.documentTitle ?? "Untitled Form",
-          formDescription: formResponseFromGoogle.data.info?.description ?? "",
-          ownerId: formOwner.id,
-          lastSyncedTimestamp: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: form.googleFormId,
-          set: {
+      const result = await db.transaction(async (db) => {
+        // 2. Update the form information
+        const [updatedForm] = await db
+          .insert(form)
+          .values({
+            googleFormId: input.formId,
             formName:
+              formResponseFromGoogle.data.info?.title ?? "Untitled Form",
+            formDriveName:
               formResponseFromGoogle.data.info?.documentTitle ??
               "Untitled Form",
-            formDriveName:
-              formResponseFromGoogle.data.info?.title ?? "Untitled Form",
             formDescription:
               formResponseFromGoogle.data.info?.description ?? "",
+            ownerId: formOwner.id,
             lastSyncedTimestamp: new Date(),
-          },
-        })
-        .returning();
-
-      if (!updatedForm) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update form",
-        });
-      }
-
-      const formId = updatedForm.id;
-
-      // 3. Sync the form fields
-      // we need to be able to handle deletes anyways so just fetch all the fields
-      const fieldWrites: Promise<any>[] = [];
-
-      for (const [index, field] of (
-        formResponseFromGoogle.data.items ?? []
-      ).entries()) {
-        if (!field.questionItem || !field.questionItem.question) {
-          logger.debug("Skipping non question field");
-          continue;
-        }
-        const question = field.questionItem.question;
-        const { type: questionType, options } =
-          getQuestionTypeAndData(question);
-
-        logger.debug(`Processing field ${field.itemId} on form ${formId}`);
-        // Create a new field
-        const fieldData = {
-          googleItemId: field.itemId,
-          fieldName: field.title ?? "Untitled Field",
-          fieldType: questionType,
-          fieldOptions: getQuestionOptions(questionType, options),
-          formId,
-          positionIndex: index,
-        };
-
-        const newField = db
-          .insert(formFields)
-          .values(fieldData)
+          })
           .onConflictDoUpdate({
-            target: formFields.googleItemId,
-            set: fieldData,
+            target: form.googleFormId,
+            set: {
+              formName:
+                formResponseFromGoogle.data.info?.documentTitle ??
+                "Untitled Form",
+              formDriveName:
+                formResponseFromGoogle.data.info?.title ?? "Untitled Form",
+              formDescription:
+                formResponseFromGoogle.data.info?.description ?? "",
+              lastSyncedTimestamp: new Date(),
+            },
           })
           .returning();
 
-        fieldWrites.push(newField);
-      }
-
-      const updatedFields = await Promise.all(fieldWrites);
-      logger.debug(`Updated ${updatedFields.length} fields`);
-
-      // 4. Sync the form responses
-      const formResponses = await formResponsesPromise;
-
-      if (!formResponses.data) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to fetch form responses",
-        });
-      }
-
-      const responses = formResponses.data.responses ?? [];
-
-      logger.debug(
-        `Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
-      );
-
-      const responsePromises = responses.map(async (response) => {
-        const updateData = {
-          googleResponseId: response.responseId,
-          formId,
-          respondentEmail: response.respondentEmail,
-        };
-
-        const [createdResponse] = await db
-          .insert(formResponseDBSchema)
-          .values(updateData)
-          .onConflictDoUpdate({
-            target: [
-              formResponseDBSchema.googleResponseId,
-              formResponseDBSchema.formId,
-            ],
-            set: updateData,
-          })
-          .returning();
-
-        if (!createdResponse) {
+        if (!updatedForm) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: `Failed to create response with google id ${response.responseId} for form ${formId}`,
+            message: "Failed to update form",
           });
         }
-        logger.debug(`Created/Updated response ${createdResponse.id}`);
 
-        if (!response.answers) {
-          return;
+        const formId = updatedForm.id;
+
+        // 3. Sync the form fields
+        // we need to be able to handle deletes anyways so just fetch all the fields
+        const fieldWrites: Promise<any>[] = [];
+
+        for (const [index, field] of (
+          formResponseFromGoogle.data.items ?? []
+        ).entries()) {
+          if (!field.questionItem || !field.questionItem.question) {
+            logger.debug("Skipping non question field");
+            continue;
+          }
+          const question = field.questionItem.question;
+          const { type: questionType, options } =
+            getQuestionTypeAndData(question);
+
+          logger.debug(
+            `Processing field ${field.questionItem.question.questionId} on form ${formId}`,
+          );
+          // Create a new field
+          const fieldData = {
+            googleQuestionId: field.questionItem.question.questionId,
+            fieldName: field.title ?? "Untitled Field",
+            fieldType: questionType,
+            fieldOptions: getQuestionOptions(questionType, options),
+            formId,
+            positionIndex: index,
+          };
+
+          const newField = db
+            .insert(formFields)
+            .values(fieldData)
+            .onConflictDoUpdate({
+              target: formFields.googleQuestionId,
+              set: fieldData,
+            })
+            .returning();
+
+          fieldWrites.push(newField);
         }
 
-        // Sync the answers in a given response
-        const answerPromises = Object.entries(response.answers).map(
-          async ([questionId, responseData]) => {
-            if (!responseData.textAnswers?.answers) {
-              logger.debug("Skipping non text answer");
-              return;
-            }
+        const updatedFields = await Promise.all(fieldWrites);
+        logger.debug(`Updated ${updatedFields.length} fields`);
 
-            const data = {
-              response: responseData.textAnswers.answers.reduce(
-                (acc, answer) => {
-                  return acc + answer.value;
-                },
-                "",
-              ),
-              formResponseId: createdResponse.id,
-              googleQuestionId: questionId,
-            };
+        // 4. Sync the form responses
+        const formResponses = await formResponsesPromise;
 
-            const [createdFieldResponse] = await db
-              .insert(formFieldResponse)
-              .values(data)
-              .onConflictDoUpdate({
-                target: [
-                  formFieldResponse.googleQuestionId,
-                  formFieldResponse.formResponseId,
-                ],
-                set: data,
-              })
-              .returning();
+        if (!formResponses.data) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch form responses",
+          });
+        }
 
-            if (!createdFieldResponse) {
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: `Failed to create field response for form response ${createdResponse.id}`,
-              });
-            }
+        const responses = formResponses.data.responses ?? [];
 
-            return createdFieldResponse;
-          },
-        );
-
-        // Await all the answer updates concurrently for this response
-        const result = await Promise.all(answerPromises);
         logger.debug(
-          `Updated ${result.length} answers for response ${createdResponse.id}`,
+          `Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
         );
+
+        const responsePromises = responses.map(async (response) => {
+          const updateData = {
+            googleResponseId: response.responseId,
+            formId,
+            respondentEmail: response.respondentEmail,
+          };
+
+          const [createdResponse] = await db
+            .insert(formResponseDBSchema)
+            .values(updateData)
+            .onConflictDoUpdate({
+              target: [
+                formResponseDBSchema.googleResponseId,
+                formResponseDBSchema.formId,
+              ],
+              set: updateData,
+            })
+            .returning();
+
+          if (!createdResponse) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: `Failed to create response with google id ${response.responseId} for form ${formId}`,
+            });
+          }
+          logger.debug(`Created/Updated response ${createdResponse.id}`);
+
+          if (!response.answers) {
+            return;
+          }
+
+          // Sync the answers in a given response
+          const answerPromises = Object.entries(response.answers).map(
+            async ([questionId, responseData]) => {
+              if (!responseData.textAnswers?.answers) {
+                logger.debug("Skipping non text answer");
+                return;
+              }
+
+              const data = {
+                response: responseData.textAnswers.answers.reduce(
+                  (acc, answer) => {
+                    return acc + answer.value;
+                  },
+                  "",
+                ),
+                formResponseId: createdResponse.id,
+                googleQuestionId: questionId,
+                formFieldId: questionId,
+              };
+              try {
+                const [createdFieldResponse] = await db
+                  .insert(formFieldResponse)
+                  .values(data)
+                  .onConflictDoUpdate({
+                    target: [
+                      formFieldResponse.googleQuestionId,
+                      formFieldResponse.formResponseId,
+                    ],
+                    set: data,
+                  })
+                  .returning();
+                return createdFieldResponse;
+              } catch (e) {
+                console.log(e);
+                console.log("Response failed here");
+
+                // Todo syncing will fail because we don't support all question types
+                console.log(data);
+              }
+            },
+          );
+
+          // Await all the answer updates concurrently for this response
+          const result = await Promise.all(answerPromises);
+          logger.debug(
+            `Updated ${result.length} answers for response ${createdResponse.id}`,
+          );
+        });
+
+        // Await all the response updates concurrently
+        const result = await Promise.all(responsePromises);
+        logger.debug(`Updated ${result.length} responses for form ${formId}`);
+
+        return updatedForm;
       });
-
-      // Await all the response updates concurrently
-      const result = await Promise.all(responsePromises);
-      logger.debug(`Updated ${result.length} responses for form ${formId}`);
-
-      return formResponseFromGoogle;
+      return result;
     }),
   getFile: protectedProcedure
     .input(z.object({ fileId: z.string() }))

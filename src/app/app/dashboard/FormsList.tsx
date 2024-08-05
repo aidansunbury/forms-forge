@@ -18,7 +18,7 @@ export const FormsList = ({ forms }: { forms: Form[] }) => {
     <>
       {forms.map((form) => (
         <Link href={`/app/form/${form.id}`} key={form.id}>
-          <Card className="m-1 h-64 w-64">
+          <Card>
             <CardHeader>
               <CardTitle>{form.formDriveName}</CardTitle>
               <CardDescription>Card Description</CardDescription>
