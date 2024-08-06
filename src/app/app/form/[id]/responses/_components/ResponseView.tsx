@@ -1,5 +1,5 @@
+import type { formFieldResponse, formResponse } from "@/server/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
-import { formResponse, formFieldResponse } from "@/server/db/schema";
 
 import {
 	AccordionContent,
@@ -8,8 +8,8 @@ import {
 } from "@/components/ui/accordion";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { MultipleChoice } from "./questionComponents/MultipleChoice";
 import { ShortenedText } from "./ShortenedText";
+import { MultipleChoice } from "./questionComponents/MultipleChoice";
 
 type FiledResponsesWithFormField = InferSelectModel<
 	typeof formFieldResponse
