@@ -1,3 +1,5 @@
+import { type FieldOptions } from "@/server/db/schema";
+
 export type SimplifiedQuestionType =
   | "text"
   | "multipleChoice"
@@ -31,7 +33,10 @@ export function getQuestionTypeAndData(question: object): TypeAndOptions {
   throw new Error("Unknown question type");
 }
 
-export function getQuestionOptions(type: SimplifiedQuestionType, data: any): FieldOptions {
+export function getQuestionOptions(
+  type: SimplifiedQuestionType,
+  data: any,
+): FieldOptions {
   if (type === "text") {
     console.log(data);
     return {

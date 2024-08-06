@@ -1,7 +1,7 @@
 "use client";
 import { api } from "@/trpc/react";
 
-import { ResponseView } from "./ResponseView";
+import { ResponseView } from "./_components/ResponseView";
 import { Accordion } from "@/components/ui/accordion";
 
 const Responses = ({
@@ -21,7 +21,7 @@ const Responses = ({
       {/* To make controlled: https://stackoverflow.com/questions/77947178/is-there-any-way-to-control-shadcnui-accordion-open-and-close-functionality  */}
       <Accordion type="multiple" className="border">
         {formResponse.formResponses.map((response) => (
-          <ResponseView response={response} />
+          <ResponseView response={response} key={response.id} />
         ))}
       </Accordion>
     </div>

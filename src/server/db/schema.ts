@@ -362,8 +362,10 @@ export const formFieldResponse = createTable(
     id: varchar("id", { length: 255 })
       .notNull()
       .primaryKey()
-      .$defaultFn(() => generatePrefixedUUID("field_response  ")),
+      .$defaultFn(() => generatePrefixedUUID("field_response")),
     googleQuestionId: varchar("google_question_id", { length: 255 }),
+
+    parentPositionIndex: integer("parent_position_index"),
 
     // The overall response id
     formResponseId: varchar("form_response_id", { length: 255 })

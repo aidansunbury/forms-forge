@@ -7,21 +7,14 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
-import {
-  withOrgId,
-  AddFieldSchema,
-  RemoveFieldSchema,
-  formUpdateSchema,
-} from "@/lib/validators";
 
 import { db } from "@/server/db";
-import { eq, asc, InferInsertModel } from "drizzle-orm";
+import { eq, asc, InferInsertModel, InferSelectModel } from "drizzle-orm";
 import {
   form,
   formFields,
   formResponse as formResponseDBSchema,
   formFieldResponse,
-  type FieldOptions,
 } from "@/server/db/schema";
 import { TRPCError } from "@trpc/server";
 
@@ -81,11 +74,12 @@ export const formRouter = createTRPCRouter({
                     columns: {
                       fieldName: true,
                       fieldType: true,
-                      // positionIndex: true,
+                      fieldOptions: true,
+                      positionIndex: true,
                     },
                   },
                 },
-                // orderBy: asc(formFieldResponse.),
+                orderBy: asc(formFieldResponse.parentPositionIndex),
               },
             },
           },
@@ -214,7 +208,9 @@ export const formRouter = createTRPCRouter({
 
         // 3. Sync the form fields
         // we need to be able to handle deletes anyways so just fetch all the fields
-        const fieldWrites: Promise<any>[] = [];
+
+        const fieldWrites: Promise<InferSelectModel<typeof formFields>[]>[] =
+          [];
 
         for (const [index, field] of (
           formResponseFromGoogle.data.items ?? []
@@ -279,6 +275,25 @@ export const formRouter = createTRPCRouter({
         }
 
         const updatedFields = await Promise.all(fieldWrites);
+        if (!updatedFields[0]) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch form fields",
+          });
+        }
+
+        let fieldMap: Record<string, number> = {};
+        updatedFields.forEach((field) => {
+          if (
+            !field[0] ||
+            !field[0].googleQuestionId ||
+            !field[0].positionIndex
+          ) {
+            return;
+          }
+          fieldMap[field[0].googleQuestionId] = field[0].positionIndex;
+        });
+
         logger.debug(`Updated ${updatedFields.length} fields`);
 
         // 4. Sync the form responses
@@ -331,8 +346,11 @@ export const formRouter = createTRPCRouter({
           // Sync the answers in a given response
           const answerPromises = Object.entries(response.answers).map(
             async ([questionId, responseData]) => {
+              // console.log(fieldMap.get(questionId));
+
               const data: InferInsertModel<typeof formFieldResponse> = {
                 formResponseId: createdResponse.id,
+                parentPositionIndex: fieldMap[questionId] ?? 0,
                 formFieldId: questionId,
                 googleQuestionId: questionId,
                 response: null,
