@@ -87,8 +87,6 @@ export const createTRPCRouter = t.router;
  * network latency that would occur in production but not in local development.
  */
 
-let totalRequests = 1;
-
 const timingMiddleware = t.middleware(async ({ next, path }) => {
 	const start = Date.now();
 
@@ -96,8 +94,6 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 		// artificial delay in dev
 		const waitMs = 0; //Math.floor(Math.random() * 400) + 100;
 		console.log(`[TRPC] ${path} waiting ${waitMs}ms`);
-		console.log(`[TRPC] Total requests: ${totalRequests}`);
-		totalRequests++;
 		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
 
@@ -132,6 +128,7 @@ export const protectedProcedure = t.procedure
 	.use(timingMiddleware)
 	.use(({ ctx, next }) => {
 		if (!ctx.session || !ctx.session.user) {
+			console.log("No session");
 			throw new TRPCError({ code: "UNAUTHORIZED" });
 		}
 		return next({

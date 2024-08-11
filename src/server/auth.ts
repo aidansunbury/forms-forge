@@ -95,14 +95,14 @@ export function CustomAdapter(
 				// Get current time minus 1 minute for buffer
 				const now = new Date().getTime() / 1000 - 60;
 				if (now > session.user.googleAccessTokenExpires) {
-					console.log("google access token expired");
+					console.log("Refreshing Google Access Token");
 					googleClient.setCredentials({
 						refresh_token: session.user.googleRefreshToken,
 					});
 					const newAccessToken = await googleClient.refreshAccessToken();
-
 					if (newAccessToken.credentials.access_token) {
-						db.update(users)
+						await db
+							.update(users)
 							.set({
 								googleAccessToken: newAccessToken.credentials.access_token,
 								googleAccessTokenExpires:
@@ -110,9 +110,10 @@ export function CustomAdapter(
 							})
 							.where(eq(users.id, session.userId))
 							.returning();
-
 						session.user.googleAccessToken =
 							newAccessToken.credentials.access_token;
+						session.user.googleAccessTokenExpires =
+							newAccessToken.credentials.expiry_date;
 					}
 				}
 			}

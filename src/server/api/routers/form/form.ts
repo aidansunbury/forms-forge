@@ -220,7 +220,7 @@ export const formRouter = createTRPCRouter({
 				for (const [index, field] of (
 					formResponseFromGoogle.data.items ?? []
 				).entries()) {
-					if (field.questionGroupItem && field.questionGroupItem.grid) {
+					if (field.questionGroupItem?.grid) {
 						// Handle grid questions
 						let subIndex = 0;
 						for (const question of field.questionGroupItem.questions ?? []) {
@@ -244,12 +244,12 @@ export const formRouter = createTRPCRouter({
 									target: formFields.googleQuestionId,
 									set: fieldData,
 								})
-								.returning();
+								.returning()
+								.execute();
 							subIndex++;
 							fieldWrites.push(newField);
 						}
-						continue;
-					} else if (field.questionItem && field.questionItem.question) {
+					} else if (field.questionItem?.question) {
 						// Parse question type and options
 						const question = field.questionItem.question;
 						const { type: questionType, options } =
