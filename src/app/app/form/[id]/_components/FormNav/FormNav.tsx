@@ -36,21 +36,21 @@ export const FormNav = () => {
 		<NavigationMenu className="rounded-md shadow-md">
 			<NavigationMenuList>
 				<NavigationMenuItem>
-					<Link href={`${basePath}`} legacyBehavior passHref>
+					<Link href={`${basePath}`}>
 						<NavigationMenuLink className={getStyles("")}>
 							Overview
 						</NavigationMenuLink>
 					</Link>
 				</NavigationMenuItem>
 				<NavigationMenuItem>
-					<Link href={`${basePath}/questions`} legacyBehavior passHref>
+					<Link href={`${basePath}/questions`}>
 						<NavigationMenuLink className={getStyles("questions")}>
 							Questions
 						</NavigationMenuLink>
 					</Link>
 				</NavigationMenuItem>
 				<NavigationMenuItem>
-					<Link href={`${basePath}/responses`} legacyBehavior passHref>
+					<Link href={`${basePath}/responses`}>
 						<NavigationMenuLink className={getStyles("responses")}>
 							Responses
 						</NavigationMenuLink>
