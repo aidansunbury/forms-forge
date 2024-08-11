@@ -1,4 +1,4 @@
-import { create } from "domain";
+import { create } from "node:domain";
 import { z } from "zod";
 
 import {

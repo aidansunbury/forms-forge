@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { relations, sql } from "drizzle-orm";
 import { int } from "drizzle-orm/mysql-core";
 import {

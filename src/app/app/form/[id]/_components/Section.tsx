@@ -1,4 +1,4 @@
-import { get } from "http";
+import { get } from "node:http";
 import { useSelectedItem } from "@/app/hooks/useSelectedItem";
 import { Button } from "@/components/ui/button";
 import {

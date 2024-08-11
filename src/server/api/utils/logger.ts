@@ -14,13 +14,11 @@ const logFormat = winston.format.printf((info) => {
 
 	let message = info.message;
 	if (info[Symbol.for("splat")]) {
-		message +=
-			" " +
-			info[Symbol.for("splat")]
-				.map((arg: any) =>
-					typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg,
-				)
-				.join(" ");
+		message += ` ${info[Symbol.for("splat")]
+			.map((arg: any) =>
+				typeof arg === "object" ? JSON.stringify(arg, null, 2) : arg,
+			)
+			.join(" ")}`;
 	}
 
 	return `${date}-${info.level}: ${message}`;

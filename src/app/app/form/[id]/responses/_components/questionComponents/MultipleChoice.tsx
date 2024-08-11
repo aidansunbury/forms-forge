@@ -23,14 +23,13 @@ export const MultipleChoice = ({
 					<ShortenedText text={option} maxLength={20} />
 				</div>
 			);
-		} else {
-			return (
-				<div className="flex flex-row items-center">
-					<Circle />
-					<ShortenedText text={option} maxLength={20} />
-				</div>
-			);
 		}
+		return (
+			<div className="flex flex-row items-center">
+				<Circle />
+				<ShortenedText text={option} maxLength={20} />
+			</div>
+		);
 	};
 
 	return (

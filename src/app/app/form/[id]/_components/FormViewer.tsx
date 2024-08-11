@@ -63,7 +63,8 @@ const findById = (id: string, data: FormData): FormUpdate | null => {
 			type: "form",
 			data: { ...data, sections: [] } as any,
 		};
-	} else if (id.includes("section")) {
+	}
+	if (id.includes("section")) {
 		const section = data.sections.find((section) => section.id === id);
 		if (!section) {
 			return null;
@@ -72,7 +73,8 @@ const findById = (id: string, data: FormData): FormUpdate | null => {
 			type: "section",
 			data: { ...section },
 		};
-	} else if (id.includes("field")) {
+	}
+	if (id.includes("field")) {
 		console.log("field");
 		for (const section of data.sections) {
 			const field = section.fields.find((field) => field.id === id);
