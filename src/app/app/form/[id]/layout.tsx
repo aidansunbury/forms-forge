@@ -1,31 +1,98 @@
 "use client";
 
-import React from "react";
-import { api } from "@/trpc/react";
-import { FormNav } from "./_components/FormNav/FormNav";
+import { Button } from "@/components/ui/button";
+import { Header } from "@/components/ui/header";
+import { Text } from "@/components/ui/text";
+import { useToast } from "@/components/ui/use-toast";
 import { getEditFormUrl } from "@/lib/utils";
-import { Pencil } from "lucide-react";
-import { Link } from "next/link";
+import { api } from "@/trpc/react";
+import { Pencil, RefreshCcw } from "lucide-react";
+import type React from "react";
+import { FormNav } from "./_components/FormNav/FormNav";
+
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function FormLayout({
-  children,
-  params,
+	children,
+	params,
 }: Readonly<{
-  children: React.ReactNode;
-  params: { id: string };
+	children: React.ReactNode;
+	params: { id: string };
 }>) {
-  const [form] = api.form.getForm.useSuspenseQuery({ formId: params.id });
+	const utils = api.useUtils();
 
-  return (
-    <div className="flex w-full flex-col items-center">
-      <h1>{form.formName}</h1>
-      <a href={getEditFormUrl(form.googleFormId)}>
-        <Pencil size={24} />
-      </a>
-      {/* <h2>{form.formDescription}</h2> */}
-      <FormNav />
-      {params.id}
-      {children}
-    </div>
-  );
+	const [form] = api.form.getFormByFields.useSuspenseQuery({
+		formId: params.id,
+	});
+	const { toast } = useToast();
+
+	const { mutate: syncForm, isPending } = api.form.syncForm.useMutation({
+		onSuccess: () => {
+			toast({
+				variant: "success",
+				title: "Success",
+				description: "Form synced successfully",
+			});
+			utils.form.getFormByResponses.invalidate({ formId: params.id });
+		},
+		onError: (error) => {
+			toast({
+				variant: "destructive",
+				title: "Error",
+				description: "Failed to sync form",
+			});
+		},
+	});
+
+	return (
+		<div className="flex w-full flex-col items-center border">
+			<div className="self-start flex flex-row">
+				<Header className="mt-2">{form.formName}</Header>
+				<TooltipProvider>
+					<Tooltip>
+						<TooltipTrigger>
+							<Button asChild variant="wrap">
+								<a
+									href={getEditFormUrl(form.googleFormId)}
+									target="_blank"
+									rel="noreferrer"
+									className="flex flex-row"
+								>
+									<Pencil size={18} />
+								</a>
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent className="max-w-64" side="bottom">
+							<Text size="xs">Edit Form in Google Forms</Text>
+						</TooltipContent>
+					</Tooltip>
+					<Tooltip>
+						<TooltipTrigger>
+							<Button
+								className="flex flex-row"
+								variant="wrap"
+								disabled={isPending}
+								onClick={() =>
+									syncForm({ formId: form.googleFormId, initialSync: false })
+								}
+							>
+								<RefreshCcw size={18} />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent className="max-w-64" side="bottom">
+							<Text size="xs">Sync Form with Google</Text>
+						</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
+			</div>
+
+			<FormNav />
+			{children}
+		</div>
+	);
 }
