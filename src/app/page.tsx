@@ -1,12 +1,7 @@
-import Link from "next/link";
-
 import { getServerAuthSession } from "@/server/auth";
 import { HydrateClient } from "@/trpc/server";
 
 import { SignInButton } from "@/components/SignInButton";
-import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
-import Picker from "./_components/Picker";
 
 export default async function Home() {
 	const session = await getServerAuthSession();

@@ -156,7 +156,8 @@ export const authOptions: NextAuthOptions = {
 			};
 		},
 		signIn: async ({ account, user }) => {
-			// Store tokens in db
+			// Todo Fix this, solution outlined in issue https://github.com/aidansunbury/tiny-ats/issues/16
+
 			await db
 				.update(users)
 				.set({

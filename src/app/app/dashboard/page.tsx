@@ -12,6 +12,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FormsList } from "./FormsList";
 import { ImportForm } from "./ImportForm";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Header } from "@/components/ui/header";
 
 import { api } from "@/trpc/server";
 
@@ -25,8 +34,10 @@ export default async function Dashboard() {
 	}
 
 	return (
-		<div className="m-2 p-2">
-			<h1>Dashboard</h1>
+		<div className="">
+			<Header as="h1" size="h1">
+				Dashboard
+			</Header>
 			<div className="flex w-full flex-row flex-wrap">
 				<FormsList forms={myForms} />
 				<ImportForm />

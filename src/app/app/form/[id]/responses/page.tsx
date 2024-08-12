@@ -3,6 +3,7 @@ import { api } from "@/trpc/react";
 
 import { Accordion } from "@/components/ui/accordion";
 import { ResponseView } from "./_components/ResponseView";
+import { Header } from "@/components/ui/header";
 
 const Responses = ({
 	children,
@@ -17,9 +18,11 @@ const Responses = ({
 
 	return (
 		<div className="w-full">
-			<h1>Responses</h1>
+			<Header as="h2" size="h2">
+				Responses
+			</Header>
 			{/* To make controlled: https://stackoverflow.com/questions/77947178/is-there-any-way-to-control-shadcnui-accordion-open-and-close-functionality  */}
-			<Accordion type="multiple" className="border">
+			<Accordion type="multiple" className="space-y-1">
 				{formResponse.formResponses.map((response) => (
 					<ResponseView response={response} key={response.id} />
 				))}

@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { relations, sql } from "drizzle-orm";
-import { int } from "drizzle-orm/mysql-core";
 import {
 	bigint,
 	boolean,
@@ -15,7 +14,6 @@ import {
 	uniqueIndex,
 	varchar,
 } from "drizzle-orm/pg-core";
-import { google } from "googleapis";
 import type { AdapterAccount } from "next-auth/adapters";
 
 export type FieldOptions =
@@ -46,9 +44,11 @@ export type FieldOptions =
 			};
 	  };
 
-// export const defaultFieldOptions: FieldOptions = {
-//   options: [],
-// };
+export type FileResponse = {
+	fileId: string;
+	fileName: string;
+	mimeType: string;
+};
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -207,6 +207,10 @@ export const form = createTable(
 		formDriveName: varchar("form_drive_name").notNull(),
 		formDescription: varchar("form_description"),
 		formOptions: json("form_options"),
+
+		// Total responses for the form
+		responseCount: integer("response_count").default(0),
+
 		boardId: varchar("board_id", { length: 255 }).references(() => boards.id),
 		formGroupId: varchar("form_group_id", { length: 255 }).references(
 			() => formGroup.id,
@@ -308,6 +312,10 @@ export const formResponse = createTable(
 			.primaryKey()
 			.$defaultFn(() => generatePrefixedUUID("response")),
 		googleResponseId: varchar("google_response_id", { length: 255 }),
+		submittedTimestamp: timestamp("submitted_timestamp", {
+			mode: "date",
+			withTimezone: true,
+		}),
 
 		// userId: varchar("user_id", { length: 255 }).notNull(), // todo create relation
 
@@ -349,12 +357,6 @@ export const formResponseRelations = relations(
 		formFieldResponses: many(formFieldResponse),
 	}),
 );
-
-type FileResponse = {
-	fileId: string;
-	fileName: string;
-	mimeType: string;
-};
 
 export const formFieldResponse = createTable(
 	"form_field_responses",

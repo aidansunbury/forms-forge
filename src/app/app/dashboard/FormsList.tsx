@@ -21,14 +21,10 @@ export const FormsList = ({ forms }: { forms: Form[] }) => {
 					<Card>
 						<CardHeader>
 							<CardTitle>{form.formDriveName}</CardTitle>
-							<CardDescription>Card Description</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<p>Card Content</p>
+							<p>Responses: {form.responseCount}</p>
 						</CardContent>
-						<CardFooter>
-							<p>Card Footer</p>
-						</CardFooter>
 					</Card>
 				</Link>
 			))}

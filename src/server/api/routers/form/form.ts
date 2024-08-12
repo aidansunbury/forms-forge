@@ -1,4 +1,3 @@
-import { create } from "node:domain";
 import { z } from "zod";
 
 import {
@@ -26,6 +25,7 @@ import {
 import { env } from "@/env";
 import { google } from "googleapis";
 import { getQuestionOptions, getQuestionTypeAndData } from "./formHelpers";
+import { sql } from "drizzle-orm";
 
 import { logger } from "../../utils/logger";
 
@@ -313,6 +313,17 @@ export const formRouter = createTRPCRouter({
 
 				const responses = formResponses.data.responses ?? [];
 
+				// Increment the form responses total
+				const updatedCount = await trx
+					.update(form)
+					.set({
+						responseCount: sql`response_count + ${responses.length}`,
+					})
+					.where(eq(form.id, formId))
+					.returning();
+
+				console.log(updatedCount);
+
 				logger.debug(
 					`Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
 				);
@@ -322,6 +333,7 @@ export const formRouter = createTRPCRouter({
 						googleResponseId: response.responseId,
 						formId,
 						respondentEmail: response.respondentEmail,
+						submittedTimestamp: new Date(response.lastSubmittedTime),
 					};
 
 					const [createdResponse] = await trx

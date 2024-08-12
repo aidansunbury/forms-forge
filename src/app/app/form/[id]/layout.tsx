@@ -50,9 +50,11 @@ export default function FormLayout({
 	});
 
 	return (
-		<div className="flex w-full flex-col items-center border">
+		<div className="flex w-full flex-col items-center">
 			<div className="self-start flex flex-row">
-				<Header className="mt-2">{form.formName}</Header>
+				<Header className="mt-2" as="h1" size="h1">
+					{form.formName}
+				</Header>
 				<TooltipProvider>
 					<Tooltip>
 						<TooltipTrigger>
