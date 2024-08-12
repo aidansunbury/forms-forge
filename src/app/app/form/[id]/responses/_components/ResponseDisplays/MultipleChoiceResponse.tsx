@@ -1,8 +1,8 @@
+import { Badge } from "@/components/ui/badge";
+import { Text } from "@/components/ui/text";
 import type { formFieldResponse, formFields } from "@/server/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 import { ShortenedText } from "../../../../../../../components/ShortenedText";
-import { Badge } from "@/components/ui/badge";
-import { Text } from "@/components/ui/text";
 
 // Todo consider displaying all options, then highlighting the selected ones
 export const MultipleChoiceResponse = ({
@@ -17,7 +17,7 @@ export const MultipleChoiceResponse = ({
 	}
 
 	return (
-		<div className="flex flex-row items-center flex-wrap">
+		<div className="flex flex-row flex-wrap items-center">
 			{field.fieldOptions.options
 				.filter((option) => response.response?.includes(option))
 				.map((option) => (

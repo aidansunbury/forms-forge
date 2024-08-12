@@ -1,7 +1,7 @@
-import { Badge, badgeVariants } from "@/components/ui/badge";
-import Link from "next/link";
-import type { FileResponse as FileResponseType } from "@/server/db/schema";
 import { ShortenedText } from "@/components/ShortenedText";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import type { FileResponse as FileResponseType } from "@/server/db/schema";
+import Link from "next/link";
 
 const getFileViewUrl = (fileId: string) => {
 	return `https://drive.google.com/file/d/${fileId}/view`;

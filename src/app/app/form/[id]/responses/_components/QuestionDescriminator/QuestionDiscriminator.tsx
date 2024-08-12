@@ -1,13 +1,13 @@
+import { Text } from "@/components/ui/text";
 // Based on the question type and the response, determine what response display to show to show and how many grid columns to take up
 import type React from "react";
+import { QuestionWrapper } from "../QuestionWrapper/QuestionWrapper";
+import { FileResponse } from "../ResponseDisplays/FileResponse";
+import { MultipleChoiceResponse } from "../ResponseDisplays/MultipleChoiceResponse";
 import type {
 	BlockSize,
 	FieldResponsesWithFormField,
 } from "../responses.types";
-import { QuestionWrapper } from "../QuestionWrapper/QuestionWrapper";
-import { Text } from "@/components/ui/text";
-import { MultipleChoiceResponse } from "../ResponseDisplays/MultipleChoiceResponse";
-import { FileResponse } from "../ResponseDisplays/FileResponse";
 
 export const QuestionDiscriminator = ({
 	question,

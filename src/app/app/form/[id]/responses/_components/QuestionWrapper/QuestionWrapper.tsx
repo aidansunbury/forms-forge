@@ -1,8 +1,8 @@
+import { ShortenedText } from "@/components/ShortenedText";
+import clsx from "clsx";
 // Wraps the question
 // Takes children to render responses
 import type React from "react";
-import { ShortenedText } from "@/components/ShortenedText";
-import clsx from "clsx";
 
 type BlockSize = "small" | "medium" | "large";
 
@@ -32,10 +32,10 @@ export const QuestionWrapper: React.FC<QuestionWrapperProps> = ({
 }) => {
 	return (
 		<div
-			className={clsx("bg-gray-100 rounded-md p-1", {
+			className={clsx("rounded-md bg-gray-100 p-1", {
 				"col-span-1": size === "small",
-				"lg:col-span-2 col-span-1": size === "medium",
-				"xl:col-span-4 lg:col-span-2 col-span-1": size === "large",
+				"col-span-1 lg:col-span-2": size === "medium",
+				"col-span-1 lg:col-span-2 xl:col-span-4": size === "large",
 			})}
 		>
 			<ShortenedText

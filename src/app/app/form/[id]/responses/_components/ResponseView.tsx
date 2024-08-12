@@ -32,8 +32,8 @@ export const ResponseView = ({
 
 	return (
 		<AccordionItem value={response.id} className="border-none">
-			<AccordionTrigger className="bg-gray-200 px-2 rounded-md">
-				<div className="flex flex-row w-full justify-between">
+			<AccordionTrigger className="rounded-md bg-gray-200 px-2">
+				<div className="flex w-full flex-row justify-between">
 					<Text>{response.respondentEmail}</Text>
 
 					<Text size="sm">
@@ -41,8 +41,8 @@ export const ResponseView = ({
 					</Text>
 				</div>
 			</AccordionTrigger>
-			<AccordionContent className="p-2 border">
-				<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+			<AccordionContent className="border p-2">
+				<div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
 					{ComponentArray}
 				</div>
 			</AccordionContent>

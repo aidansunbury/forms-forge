@@ -6,6 +6,14 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
+			"nursery": {
+				"useSortedClasses": {
+					"level": "error",
+					"options": {
+						"functions": ["clsx", "cva", "cn"]
+					}
+				}
+			},
 			"recommended": true
 		}
 	},
