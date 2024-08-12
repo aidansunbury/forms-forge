@@ -1,40 +1,38 @@
-import type { formFieldResponse, formResponse } from "@/server/db/schema";
-import type { InferSelectModel } from "drizzle-orm";
-
 import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { ShortenedText } from "./ShortenedText";
-import { MultipleChoice } from "./questionComponents/MultipleChoice";
-import { FileComponent } from "./questionComponents/FileComponent";
 import { Text } from "@/components/ui/text";
 import { formatTimestamp } from "@/lib/dateFormat";
-
-type FiledResponsesWithFormField = InferSelectModel<
-	typeof formFieldResponse
-> & {
-	formField: {
-		fieldName: string;
-		fieldType: string;
-	};
-};
-
-type ResponseWithFieldResponses = InferSelectModel<typeof formResponse> & {
-	formFieldResponses: FiledResponsesWithFormField[];
-};
+import { QuestionDiscriminator } from "./QuestionDescriminator/QuestionDiscriminator";
+import type { FormResponseWithFieldResponses } from "./responses.types";
 
 export const ResponseView = ({
 	response,
 }: {
-	response: ResponseWithFieldResponses;
+	response: FormResponseWithFieldResponses;
 }) => {
+	const ComponentArray: React.ReactNode[] = [];
+	for (let i = 0; i < response.formFieldResponses.length; i++) {
+		const field = response.formFieldResponses[i];
+		if (!field) {
+			continue;
+		}
+
+		if (field.formField.fieldType === "grid") {
+			continue;
+			// Todo: Implement grid display
+		}
+		ComponentArray.push(
+			<QuestionDiscriminator question={field} index={i} key={field.id} />,
+		);
+	}
+
 	return (
 		<AccordionItem value={response.id} className="border-none">
-			<AccordionTrigger className="bg-gray-300 px-2 rounded-md">
+			<AccordionTrigger className="bg-gray-200 px-2 rounded-md">
 				<div className="flex flex-row w-full justify-between">
 					<Text>{response.respondentEmail}</Text>
 
@@ -44,26 +42,9 @@ export const ResponseView = ({
 				</div>
 			</AccordionTrigger>
 			<AccordionContent className="p-2 border">
-				{/* <Card className="h-fit w-full">
-						<CardContent> */}
-				{response.formFieldResponses.map((fieldResponse) => (
-					<div key={fieldResponse.id} className="space-y-1">
-						<ShortenedText
-							maxLength={50}
-							text={fieldResponse.formField.fieldName}
-						/>{" "}
-						: {fieldResponse.response}
-						<MultipleChoice
-							response={fieldResponse}
-							field={fieldResponse.formField}
-						/>
-						{fieldResponse.formField.fieldType === "fileUpload" && (
-							<FileComponent files={fieldResponse.fileResponse} />
-						)}
-					</div>
-				))}
-				{/* </CardContent>
-					</Card> */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+					{ComponentArray}
+				</div>
 			</AccordionContent>
 		</AccordionItem>
 	);

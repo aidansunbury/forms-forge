@@ -44,9 +44,9 @@ export const ShortenedText: React.FC<ShortenedTextProps> = ({
 // Using custom h1 wrapper
 // biome-ignore lint/complexity/noUselessLoneBlockStatements: <example usage>
 {
-	/* <ShortenedText 
-  text="Long text here" 
-  maxLength={10} 
-  TextWrapper={({ children }) => <h1 className="font-bold">{children}</h1>} 
+	/* <ShortenedText
+  text="Long text here"
+  maxLength={10}
+  TextWrapper={({ children }) => <h1 className="font-bold">{children}</h1>}
 /> */
 }

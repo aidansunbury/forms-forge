@@ -65,7 +65,7 @@ export const FormNav = () => {
 							<ListItem key={"1"} title="Customers" href="#">
 								{""}
 							</ListItem>
-							<Button variant="secondary">
+							<Button variant="default">
 								<CirclePlus className="mr-1" />
 								New Table view
 							</Button>

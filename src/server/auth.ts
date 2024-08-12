@@ -105,15 +105,17 @@ export function CustomAdapter(
 							.update(users)
 							.set({
 								googleAccessToken: newAccessToken.credentials.access_token,
-								googleAccessTokenExpires:
-									newAccessToken.credentials.expiry_date,
+								googleAccessTokenExpires: Math.floor(
+									(newAccessToken.credentials.expiry_date as number) / 1000,
+								),
 							})
 							.where(eq(users.id, session.userId))
 							.returning();
 						session.user.googleAccessToken =
 							newAccessToken.credentials.access_token;
-						session.user.googleAccessTokenExpires =
-							newAccessToken.credentials.expiry_date;
+						session.user.googleAccessTokenExpires = Math.floor(
+							(newAccessToken.credentials.expiry_date as number) / 1000,
+						);
 					}
 				}
 			}

@@ -314,6 +314,7 @@ export const formRouter = createTRPCRouter({
 				const responses = formResponses.data.responses ?? [];
 
 				// Increment the form responses total
+				// Todo this does not need to be awaited, and further it needs to not add duplicates
 				const updatedCount = await trx
 					.update(form)
 					.set({
@@ -321,8 +322,6 @@ export const formRouter = createTRPCRouter({
 					})
 					.where(eq(form.id, formId))
 					.returning();
-
-				console.log(updatedCount);
 
 				logger.debug(
 					`Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
@@ -387,7 +386,7 @@ export const formRouter = createTRPCRouter({
 									);
 								}
 							}
-							const [createdFieldResponse] = await trx
+							const createdFieldResponse = trx
 								.insert(formFieldResponse)
 								.values(data)
 								.onConflictDoUpdate({
