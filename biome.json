@@ -14,6 +14,9 @@
 					}
 				}
 			},
+			"style": {
+				"noDefaultExport": "error"
+			},
 			"recommended": true
 		}
 	},
