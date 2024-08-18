@@ -6,56 +6,61 @@ import { FileResponse } from "../ResponseDisplays/FileResponse";
 import { MultipleChoiceResponse } from "../ResponseDisplays/MultipleChoiceResponse";
 import { ScaleResponse } from "../ResponseDisplays/ScaleResponse";
 import type {
-	BlockSize,
-	FieldResponsesWithFormField,
+    BlockSize,
+    FieldResponsesWithFormField,
 } from "../responses.types";
 
 export const QuestionDiscriminator = ({
-	question,
-	index,
+    question,
+    index,
 }: { question: FieldResponsesWithFormField; index: number }) => {
-	// Represents col span 1, 2, 4
-	let size: BlockSize = "small";
-	let AnswerDisplay: React.ReactNode = null;
+    // Represents col span 1, 2, 4
+    let size: BlockSize = "small";
+    let AnswerDisplay: React.ReactNode = null;
 
-	if (question.formField.fieldType === "fileUpload") {
-		AnswerDisplay = <FileResponse files={question.fileResponse || []} />;
-	} else if (question.formField.fieldType === "text") {
-		const responseText = question?.response[0] as string;
-		if (responseText.length > 100) {
-			size = "medium";
-		}
-		if (responseText.length > 300) {
-			size = "large";
-		}
+    if (question.formField.fieldType === "fileUpload") {
+        AnswerDisplay = <FileResponse files={question.fileResponse || []} />;
+    } else if (question.formField.fieldType === "text") {
+        const responseText = question?.response[0] as string;
+        if (responseText.length > 100) {
+            size = "medium";
+        }
+        if (responseText.length > 300) {
+            size = "large";
+        }
 
-		AnswerDisplay = <Text size="lg">{question.response}</Text>;
-	} else if (question.formField.fieldOptions.optionType === "multipleChoice") {
-		if (question.response.length >= 3) {
-			size = "medium";
-		}
-		if (question.response.length >= 5) {
-			size = "large";
-		}
-		AnswerDisplay = (
-			<MultipleChoiceResponse response={question} field={question.formField} />
-		);
-	} else if (question.formField.fieldOptions.optionType === "scale") {
-		size =
-			question.formField.fieldOptions.high -
-				question.formField.fieldOptions.low >
-			5
-				? "medium"
-				: "small";
-		AnswerDisplay = <ScaleResponse response={question} />;
-	}
-	return (
-		<QuestionWrapper
-			size={size}
-			index={index}
-			questionText={question.formField.fieldName}
-		>
-			{AnswerDisplay}
-		</QuestionWrapper>
-	);
+        AnswerDisplay = <Text size="lg">{question.response}</Text>;
+    } else if (
+        question.formField.fieldOptions.optionType === "multipleChoice"
+    ) {
+        if (question.response.length >= 3) {
+            size = "medium";
+        }
+        if (question.response.length >= 5) {
+            size = "large";
+        }
+        AnswerDisplay = (
+            <MultipleChoiceResponse
+                response={question}
+                field={question.formField}
+            />
+        );
+    } else if (question.formField.fieldOptions.optionType === "scale") {
+        size =
+            question.formField.fieldOptions.high -
+                question.formField.fieldOptions.low >
+            5
+                ? "medium"
+                : "small";
+        AnswerDisplay = <ScaleResponse response={question} />;
+    }
+    return (
+        <QuestionWrapper
+            size={size}
+            index={index}
+            questionText={question.formField.fieldName}
+        >
+            {AnswerDisplay}
+        </QuestionWrapper>
+    );
 };

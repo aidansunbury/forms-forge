@@ -4,27 +4,27 @@ import type { FileResponse as FileResponseType } from "@/server/db/schema";
 import Link from "next/link";
 
 const getFileViewUrl = (fileId: string) => {
-	return `https://drive.google.com/file/d/${fileId}/view`;
+    return `https://drive.google.com/file/d/${fileId}/view`;
 };
 
 export const FileResponse = ({
-	files,
+    files,
 }: { files: FileResponseType[] | null }) => {
-	if (!files) {
-		return null;
-	}
-	return (
-		<div>
-			{files.map((file) => (
-				<Link
-					className={badgeVariants({ variant: "outline" })}
-					href={getFileViewUrl(file.fileId)}
-					key={file.fileId}
-					target="_blank"
-				>
-					<ShortenedText maxLength={40} text={file.fileName} />
-				</Link>
-			))}
-		</div>
-	);
+    if (!files) {
+        return null;
+    }
+    return (
+        <div>
+            {files.map((file) => (
+                <Link
+                    className={badgeVariants({ variant: "outline" })}
+                    href={getFileViewUrl(file.fileId)}
+                    key={file.fileId}
+                    target="_blank"
+                >
+                    <ShortenedText maxLength={40} text={file.fileName} />
+                </Link>
+            ))}
+        </div>
+    );
 };

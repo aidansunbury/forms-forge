@@ -8,8 +8,8 @@ import { orgRouter } from "./routers/organization";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-	form: formRouter,
-	org: orgRouter,
+    form: formRouter,
+    org: orgRouter,
 });
 
 // export type definition of API

@@ -1,20 +1,20 @@
 import type {
-	formFieldResponse,
-	formFields,
-	formResponse,
+    formFieldResponse,
+    formFields,
+    formResponse,
 } from "@/server/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 
 export type FieldResponsesWithFormField = InferSelectModel<
-	typeof formFieldResponse
+    typeof formFieldResponse
 > & {
-	formField: InferSelectModel<typeof formFields>;
+    formField: InferSelectModel<typeof formFields>;
 };
 
 export type FormResponseWithFieldResponses = InferSelectModel<
-	typeof formResponse
+    typeof formResponse
 > & {
-	formFieldResponses: FieldResponsesWithFormField[];
+    formFieldResponses: FieldResponsesWithFormField[];
 };
 
 export type BlockSize = "small" | "medium" | "large";
