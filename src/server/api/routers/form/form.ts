@@ -1,25 +1,25 @@
 import { z } from "zod";
 
 import {
-	createTRPCRouter,
-	orgScopedProcedure,
-	protectedProcedure,
-	publicProcedure,
+    createTRPCRouter,
+    orgScopedProcedure,
+    protectedProcedure,
+    publicProcedure,
 } from "@/server/api/trpc";
 
 import { db } from "@/server/db";
 import {
-	form,
-	formFieldResponse,
-	formFields,
-	formResponse as formResponseDBSchema,
+    form,
+    formFieldResponse,
+    formFields,
+    formResponse as formResponseDBSchema,
 } from "@/server/db/schema";
 import { TRPCError } from "@trpc/server";
 import {
-	type InferInsertModel,
-	type InferSelectModel,
-	asc,
-	eq,
+    type InferInsertModel,
+    type InferSelectModel,
+    asc,
+    eq,
 } from "drizzle-orm";
 
 import { env } from "@/env";
@@ -32,489 +32,532 @@ import { logger } from "../../utils/logger";
 // Question group items are the "checkbox grid" type of question
 
 export const formRouter = createTRPCRouter({
-	// Does not return the form fields, designed for the form list view
-	getMyForms: protectedProcedure.query(async ({ ctx }) => {
-		const forms = await db.query.form.findMany({
-			where: (form) => eq(form.ownerId, ctx.session.user.id),
-		});
-		return forms;
-	}),
+    // Does not return the form fields, designed for the form list view
+    getMyForms: protectedProcedure.query(async ({ ctx }) => {
+        const forms = await db.query.form.findMany({
+            where: (form) => eq(form.ownerId, ctx.session.user.id),
+        });
+        return forms;
+    }),
 
-	// Used for rendering form nav
-	getFormWithViews: protectedProcedure
-		.input(z.object({ formId: z.string() }))
-		.query(async ({ input }) => {
-			{
-				const retrievedFormWithViews = await db.query.form.findFirst({
-					where: eq(form.id, input.formId),
-					with: {
-						boardViews: true,
-						tableViews: true,
-					},
-				});
-				if (!retrievedFormWithViews) {
-					throw new TRPCError({
-						code: "NOT_FOUND",
-						message: `Form with id ${input.formId} not found`,
-					});
-				}
-				return retrievedFormWithViews;
-			}
-		}),
+    // Used for rendering form nav
+    getFormWithViews: protectedProcedure
+        .input(z.object({ formId: z.string() }))
+        .query(async ({ input }) => {
+            {
+                const retrievedFormWithViews = await db.query.form.findFirst({
+                    where: eq(form.id, input.formId),
+                    with: {
+                        boardViews: true,
+                        tableViews: true,
+                    },
+                });
+                if (!retrievedFormWithViews) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: `Form with id ${input.formId} not found`,
+                    });
+                }
+                return retrievedFormWithViews;
+            }
+        }),
 
-	getTableData: protectedProcedure
-		.input(z.object({ formId: z.string() }))
-		.query(async ({ input }) => {
-			// Return the form fields, then all the responses without the form fields
+    getTableData: protectedProcedure
+        .input(z.object({ formId: z.string() }))
+        .query(async ({ input }) => {
+            // Return the form fields, then all the responses without the form fields
 
-			const retrievedFormFieldsPromise = db.query.formFields.findMany({
-				where: eq(formFields.formId, input.formId),
-				orderBy: asc(formFields.positionIndex),
-			});
+            const retrievedFormFieldsPromise = db.query.formFields.findMany({
+                where: eq(formFields.formId, input.formId),
+                orderBy: asc(formFields.positionIndex),
+            });
 
-			const retrievedFormResponsesPromise = db.query.formResponse.findMany({
-				where: eq(formResponseDBSchema.formId, input.formId),
-				with: {
-					formFieldResponses: {
-						orderBy: asc(formFieldResponse.parentPositionIndex),
-					},
-				},
-			});
+            const retrievedFormResponsesPromise =
+                db.query.formResponse.findMany({
+                    where: eq(formResponseDBSchema.formId, input.formId),
+                    with: {
+                        formFieldResponses: {
+                            orderBy: asc(formFieldResponse.parentPositionIndex),
+                        },
+                    },
+                });
 
-			const [retrievedFormFields, retrievedFormResponses] = await Promise.all([
-				retrievedFormFieldsPromise,
-				retrievedFormResponsesPromise,
-			]);
+            const [retrievedFormFields, retrievedFormResponses] =
+                await Promise.all([
+                    retrievedFormFieldsPromise,
+                    retrievedFormResponsesPromise,
+                ]);
 
-			if (!retrievedFormFields) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: `Form with id ${input.formId} not found`,
-				});
-			}
+            if (!retrievedFormFields) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: `Form with id ${input.formId} not found`,
+                });
+            }
 
-			return {
-				formFields: retrievedFormFields,
-				formResponses: retrievedFormResponses,
-			};
-		}),
+            return {
+                formFields: retrievedFormFields,
+                formResponses: retrievedFormResponses,
+            };
+        }),
 
-	// Form > Responses > FormFieldResponses > FormField
-	getFormByResponses: protectedProcedure
-		.input(z.object({ formId: z.string() }))
-		.query(async ({ input }) => {
-			const retrievedForm = await db.query.form.findFirst({
-				where: eq(form.id, input.formId),
-				with: {
-					formResponses: {
-						with: {
-							formFieldResponses: {
-								with: {
-									formField: {
-										columns: {
-											fieldName: true,
-											fieldType: true,
-											fieldOptions: true,
-											positionIndex: true,
-											positionSubIndex: true,
-										},
-									},
-								},
-								orderBy: asc(formFieldResponse.parentPositionIndex),
-							},
-						},
-					},
-				},
-			});
-			if (!retrievedForm) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: `Form with id ${input.formId} not found`,
-				});
-			}
-			return retrievedForm;
-		}),
+    // Form > Responses > FormFieldResponses > FormField
+    getFormByResponses: protectedProcedure
+        .input(z.object({ formId: z.string() }))
+        .query(async ({ input }) => {
+            const retrievedForm = await db.query.form.findFirst({
+                where: eq(form.id, input.formId),
+                with: {
+                    formResponses: {
+                        with: {
+                            formFieldResponses: {
+                                with: {
+                                    formField: {
+                                        columns: {
+                                            fieldName: true,
+                                            fieldType: true,
+                                            fieldOptions: true,
+                                            positionIndex: true,
+                                            positionSubIndex: true,
+                                        },
+                                    },
+                                },
+                                orderBy: asc(
+                                    formFieldResponse.parentPositionIndex,
+                                ),
+                            },
+                        },
+                    },
+                },
+            });
+            if (!retrievedForm) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: `Form with id ${input.formId} not found`,
+                });
+            }
+            return retrievedForm;
+        }),
 
-	// Todo Make sure does not error if incorrect value passed for initialSync
-	syncForm: protectedProcedure
-		.input(
-			z.object({
-				formId: z.string(),
-				initialSync: z.boolean(),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			// 1. Fetch form from google
-			const client = new google.auth.OAuth2({
-				clientId: env.GOOGLE_CLIENT_ID,
-				clientSecret: env.GOOGLE_CLIENT_SECRET,
-			});
+    // Todo Make sure does not error if incorrect value passed for initialSync
+    syncForm: protectedProcedure
+        .input(
+            z.object({
+                formId: z.string(),
+                initialSync: z.boolean(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            // 1. Fetch form from google
+            const client = new google.auth.OAuth2({
+                clientId: env.GOOGLE_CLIENT_ID,
+                clientSecret: env.GOOGLE_CLIENT_SECRET,
+            });
 
-			let formOwner;
-			let responseAfterTimestamp = new Date(0).toISOString();
+            let formOwner;
+            let responseAfterTimestamp = new Date(0).toISOString();
 
-			if (input.initialSync) {
-				formOwner = await ctx.db.query.users.findFirst({
-					where: (user) => eq(user.id, ctx.session.user.id),
-				});
-				if (!formOwner) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: `User with id ${ctx.session.user.id} not found`,
-					});
-				}
-			} else {
-				const form = await db.query.form.findFirst({
-					where: (form) => eq(form.googleFormId, input.formId),
-					with: {
-						owner: true,
-					},
-				});
-				if (!form || !form.owner) {
-					throw new TRPCError({
-						code: "NOT_FOUND",
-						message: `Form with id ${input.formId} not found or has no owner`,
-					});
-				}
+            if (input.initialSync) {
+                formOwner = await ctx.db.query.users.findFirst({
+                    where: (user) => eq(user.id, ctx.session.user.id),
+                });
+                if (!formOwner) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: `User with id ${ctx.session.user.id} not found`,
+                    });
+                }
+            } else {
+                const form = await db.query.form.findFirst({
+                    where: (form) => eq(form.googleFormId, input.formId),
+                    with: {
+                        owner: true,
+                    },
+                });
+                if (!form || !form.owner) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: `Form with id ${input.formId} not found or has no owner`,
+                    });
+                }
 
-				responseAfterTimestamp = form.lastSyncedTimestamp.toISOString();
-				formOwner = form.owner;
-			}
-			client.setCredentials({
-				access_token: formOwner.googleAccessToken,
-				refresh_token: formOwner.googleRefreshToken,
-			});
+                responseAfterTimestamp = form.lastSyncedTimestamp.toISOString();
+                formOwner = form.owner;
+            }
+            client.setCredentials({
+                access_token: formOwner.googleAccessToken,
+                refresh_token: formOwner.googleRefreshToken,
+            });
 
-			const forms = google.forms({ version: "v1", auth: client });
+            const forms = google.forms({ version: "v1", auth: client });
 
-			logger.debug(`Getting responses after ${responseAfterTimestamp}`);
+            logger.debug(`Getting responses after ${responseAfterTimestamp}`);
 
-			// todo remove me, just for testing
-			responseAfterTimestamp = new Date(0).toISOString();
-			const formResponsesPromise = forms.forms.responses.list({
-				formId: input.formId,
-				filter: `timestamp >= ${responseAfterTimestamp}`,
-			});
+            // todo remove me, just for testing
+            responseAfterTimestamp = new Date(0).toISOString();
+            const formResponsesPromise = forms.forms.responses.list({
+                formId: input.formId,
+                filter: `timestamp >= ${responseAfterTimestamp}`,
+            });
 
-			const formResponseFromGoogle = await forms.forms.get({
-				formId: input.formId,
-			});
+            const formResponseFromGoogle = await forms.forms.get({
+                formId: input.formId,
+            });
 
-			if (!formResponseFromGoogle.data) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: `Form with google id ${input.formId} not found`,
-				});
-			}
+            if (!formResponseFromGoogle.data) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: `Form with google id ${input.formId} not found`,
+                });
+            }
 
-			const result = await db.transaction(async (trx) => {
-				// 2. Update the form information
+            const result = await db.transaction(async (trx) => {
+                // 2. Update the form information
 
-				const formData: InferInsertModel<typeof form> = {
-					googleFormId: input.formId,
-					formName: formResponseFromGoogle.data.info?.title ?? "Untitled Form",
-					formDriveName:
-						formResponseFromGoogle.data.info?.documentTitle ?? "Untitled Form",
-					formDescription: formResponseFromGoogle.data.info?.description ?? "",
-					ownerId: formOwner.id,
-					lastSyncedTimestamp: new Date(),
-				};
+                const formData: InferInsertModel<typeof form> = {
+                    googleFormId: input.formId,
+                    formName:
+                        formResponseFromGoogle.data.info?.title ??
+                        "Untitled Form",
+                    formDriveName:
+                        formResponseFromGoogle.data.info?.documentTitle ??
+                        "Untitled Form",
+                    formDescription:
+                        formResponseFromGoogle.data.info?.description ?? "",
+                    ownerId: formOwner.id,
+                    lastSyncedTimestamp: new Date(),
+                };
 
-				const [updatedForm] = await trx
-					.insert(form)
-					.values(formData)
-					.onConflictDoUpdate({
-						target: form.googleFormId,
-						set: {
-							formName:
-								formResponseFromGoogle.data.info?.documentTitle ??
-								"Untitled Form",
-							formDriveName:
-								formResponseFromGoogle.data.info?.title ?? "Untitled Form",
-							formDescription:
-								formResponseFromGoogle.data.info?.description ?? "",
-							lastSyncedTimestamp: new Date(),
-						},
-					})
-					.returning();
+                const [updatedForm] = await trx
+                    .insert(form)
+                    .values(formData)
+                    .onConflictDoUpdate({
+                        target: form.googleFormId,
+                        set: {
+                            formName:
+                                formResponseFromGoogle.data.info
+                                    ?.documentTitle ?? "Untitled Form",
+                            formDriveName:
+                                formResponseFromGoogle.data.info?.title ??
+                                "Untitled Form",
+                            formDescription:
+                                formResponseFromGoogle.data.info?.description ??
+                                "",
+                            lastSyncedTimestamp: new Date(),
+                        },
+                    })
+                    .returning();
 
-				if (!updatedForm) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to update form",
-					});
-				}
+                if (!updatedForm) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "Failed to update form",
+                    });
+                }
 
-				const formId = updatedForm.id;
+                const formId = updatedForm.id;
 
-				// 3. Sync the form fields
-				// we need to be able to handle deletes anyways so just fetch all the fields
+                // 3. Sync the form fields
+                // we need to be able to handle deletes anyways so just fetch all the fields
 
-				const fieldWrites: Promise<InferSelectModel<typeof formFields>[]>[] =
-					[];
+                const fieldWrites: Promise<
+                    InferSelectModel<typeof formFields>[]
+                >[] = [];
 
-				for (const [index, field] of (
-					formResponseFromGoogle.data.items ?? []
-				).entries()) {
-					if (field.questionGroupItem?.grid) {
-						// Handle grid questions
-						let subIndex = 0;
-						const questionsTitle = field.title ?? "Unnamed Field";
-						for (const question of field.questionGroupItem.questions ?? []) {
-							const fieldOptions = {
-								optionType: "grid" as const,
-								rowQuestion: question.rowQuestion?.title || "Unnamed Field", // The name of the sub question
-								grid: {
-									columns: {
-										type: "radio" as const, // don't care
-										options:
-											field.questionGroupItem.grid.columns?.options?.map(
-												(option) => option.value || "",
-											) ?? [],
-									},
-								},
-							};
+                for (const [index, field] of (
+                    formResponseFromGoogle.data.items ?? []
+                ).entries()) {
+                    if (field.questionGroupItem?.grid) {
+                        // Handle grid questions
+                        let subIndex = 0;
+                        const questionsTitle = field.title ?? "Unnamed Field";
+                        for (const question of field.questionGroupItem
+                            .questions ?? []) {
+                            const fieldOptions = {
+                                optionType: "grid" as const,
+                                rowQuestion:
+                                    question.rowQuestion?.title ||
+                                    "Unnamed Field", // The name of the sub question
+                                grid: {
+                                    columns: {
+                                        type: "radio" as const, // don't care
+                                        options:
+                                            field.questionGroupItem.grid.columns?.options?.map(
+                                                (option) => option.value || "",
+                                            ) ?? [],
+                                    },
+                                },
+                            };
 
-							const fieldData: InferInsertModel<typeof formFields> = {
-								googleItemId: field.itemId,
-								googleQuestionId: question.questionId,
-								fieldName: questionsTitle,
-								fieldType: "grid",
-								required: question.required || false,
-								formId,
-								positionIndex: index,
-								positionSubIndex: subIndex,
-								// Todo parse grid correctly
-								fieldOptions: fieldOptions,
-							};
+                            const fieldData: InferInsertModel<
+                                typeof formFields
+                            > = {
+                                googleItemId: field.itemId,
+                                googleQuestionId: question.questionId,
+                                fieldName: questionsTitle,
+                                fieldType: "grid",
+                                required: question.required || false,
+                                formId,
+                                positionIndex: index,
+                                positionSubIndex: subIndex,
+                                // Todo parse grid correctly
+                                fieldOptions: fieldOptions,
+                            };
 
-							const newField = trx
-								.insert(formFields)
-								.values(fieldData)
-								.onConflictDoUpdate({
-									target: formFields.googleQuestionId,
-									set: fieldData,
-								})
-								.returning()
-								.execute();
-							subIndex++;
-							fieldWrites.push(newField);
-						}
-					} else if (field.questionItem?.question) {
-						// Parse question type and options
-						const question = field.questionItem.question;
-						const { type: questionType, options } =
-							getQuestionTypeAndData(question);
+                            const newField = trx
+                                .insert(formFields)
+                                .values(fieldData)
+                                .onConflictDoUpdate({
+                                    target: formFields.googleQuestionId,
+                                    set: fieldData,
+                                })
+                                .returning()
+                                .execute();
+                            subIndex++;
+                            fieldWrites.push(newField);
+                        }
+                    } else if (field.questionItem?.question) {
+                        // Parse question type and options
+                        const question = field.questionItem.question;
+                        const { type: questionType, options } =
+                            getQuestionTypeAndData(question);
 
-						// Create a new field
-						const fieldData: InferInsertModel<typeof formFields> = {
-							googleItemId: field.itemId,
-							googleQuestionId: field.questionItem.question.questionId,
-							fieldName: field.title ?? "Untitled Field",
-							fieldType: questionType,
-							fieldOptions: getQuestionOptions(questionType, options),
-							formId,
-							positionIndex: index,
-						};
+                        // Create a new field
+                        const fieldData: InferInsertModel<typeof formFields> = {
+                            googleItemId: field.itemId,
+                            googleQuestionId:
+                                field.questionItem.question.questionId,
+                            fieldName: field.title ?? "Untitled Field",
+                            fieldType: questionType,
+                            fieldOptions: getQuestionOptions(
+                                questionType,
+                                options,
+                            ),
+                            formId,
+                            positionIndex: index,
+                        };
 
-						const newField = trx
-							.insert(formFields)
-							.values(fieldData)
-							.onConflictDoUpdate({
-								target: formFields.googleQuestionId,
-								set: fieldData,
-							})
-							.returning();
+                        const newField = trx
+                            .insert(formFields)
+                            .values(fieldData)
+                            .onConflictDoUpdate({
+                                target: formFields.googleQuestionId,
+                                set: fieldData,
+                            })
+                            .returning();
 
-						fieldWrites.push(newField);
-					}
-				}
+                        fieldWrites.push(newField);
+                    }
+                }
 
-				const updatedFields = await Promise.all(fieldWrites);
-				if (!updatedFields[0]) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to fetch form fields",
-					});
-				}
+                const updatedFields = await Promise.all(fieldWrites);
+                if (!updatedFields[0]) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "Failed to fetch form fields",
+                    });
+                }
 
-				const fieldMap: Record<string, number> = {};
-				updatedFields.forEach((field) => {
-					if (
-						!field[0] ||
-						!field[0].googleQuestionId ||
-						!field[0].positionIndex
-					) {
-						return;
-					}
-					fieldMap[field[0].googleQuestionId] = field[0].positionIndex;
-				});
+                const fieldMap: Record<string, number> = {};
+                updatedFields.forEach((field) => {
+                    if (
+                        !field[0] ||
+                        !field[0].googleQuestionId ||
+                        !field[0].positionIndex
+                    ) {
+                        return;
+                    }
+                    fieldMap[field[0].googleQuestionId] =
+                        field[0].positionIndex;
+                });
 
-				logger.debug(`Updated ${updatedFields.length} fields`);
+                logger.debug(`Updated ${updatedFields.length} fields`);
 
-				// 4. Sync the form responses
-				const formResponses = await formResponsesPromise;
+                // 4. Sync the form responses
+                const formResponses = await formResponsesPromise;
 
-				if (!formResponses.data) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to fetch form responses",
-					});
-				}
+                if (!formResponses.data) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "Failed to fetch form responses",
+                    });
+                }
 
-				const responses = formResponses.data.responses ?? [];
+                const responses = formResponses.data.responses ?? [];
 
-				// Increment the form responses total
-				// Todo this does not need to be awaited, and further it needs to not add duplicates
-				const updatedCount = await trx
-					.update(form)
-					.set({
-						responseCount: sql`response_count + ${responses.length}`,
-					})
-					.where(eq(form.id, formId))
-					.returning();
+                // Increment the form responses total
+                // Todo this does not need to be awaited, and further it needs to not add duplicates
+                const updatedCount = await trx
+                    .update(form)
+                    .set({
+                        responseCount: sql`response_count + ${responses.length}`,
+                    })
+                    .where(eq(form.id, formId))
+                    .returning();
 
-				logger.debug(
-					`Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
-				);
+                logger.debug(
+                    `Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
+                );
 
-				const responsePromises = responses.map(async (response) => {
-					const updateData: InferInsertModel<typeof formResponseDBSchema> = {
-						googleResponseId: response.responseId,
-						formId,
-						respondentEmail: response.respondentEmail,
-						submittedTimestamp: new Date(response.lastSubmittedTime),
-					};
+                const responsePromises = responses.map(async (response) => {
+                    const updateData: InferInsertModel<
+                        typeof formResponseDBSchema
+                    > = {
+                        googleResponseId: response.responseId,
+                        formId,
+                        respondentEmail: response.respondentEmail,
+                        submittedTimestamp: new Date(
+                            response.lastSubmittedTime,
+                        ),
+                    };
 
-					const [createdResponse] = await trx
-						.insert(formResponseDBSchema)
-						.values(updateData)
-						.onConflictDoUpdate({
-							target: [
-								formResponseDBSchema.googleResponseId,
-								formResponseDBSchema.formId,
-							],
-							set: updateData,
-						})
-						.returning();
+                    const [createdResponse] = await trx
+                        .insert(formResponseDBSchema)
+                        .values(updateData)
+                        .onConflictDoUpdate({
+                            target: [
+                                formResponseDBSchema.googleResponseId,
+                                formResponseDBSchema.formId,
+                            ],
+                            set: updateData,
+                        })
+                        .returning();
 
-					if (!createdResponse) {
-						throw new TRPCError({
-							code: "INTERNAL_SERVER_ERROR",
-							message: `Failed to create response with google id ${response.responseId} for form ${formId}`,
-						});
-					}
-					logger.debug(`Created/Updated response ${createdResponse.id}`);
+                    if (!createdResponse) {
+                        throw new TRPCError({
+                            code: "INTERNAL_SERVER_ERROR",
+                            message: `Failed to create response with google id ${response.responseId} for form ${formId}`,
+                        });
+                    }
+                    logger.debug(
+                        `Created/Updated response ${createdResponse.id}`,
+                    );
 
-					if (!response.answers) {
-						return;
-					}
+                    if (!response.answers) {
+                        return;
+                    }
 
-					// Sync the answers in a given response
-					const answerPromises = Object.entries(response.answers).map(
-						async ([questionId, responseData]) => {
-							// console.log(fieldMap.get(questionId));
+                    // Sync the answers in a given response
+                    const answerPromises = Object.entries(response.answers).map(
+                        async ([questionId, responseData]) => {
+                            // console.log(fieldMap.get(questionId));
 
-							const data: InferInsertModel<typeof formFieldResponse> = {
-								formResponseId: createdResponse.id,
-								parentPositionIndex: fieldMap[questionId] ?? 0,
-								formFieldId: questionId,
-								googleQuestionId: questionId,
-								response: null,
-								fileResponse: null,
-							};
+                            const data: InferInsertModel<
+                                typeof formFieldResponse
+                            > = {
+                                formResponseId: createdResponse.id,
+                                parentPositionIndex: fieldMap[questionId] ?? 0,
+                                formFieldId: questionId,
+                                googleQuestionId: questionId,
+                                response: null,
+                                fileResponse: null,
+                            };
 
-							if (responseData.fileUploadAnswers) {
-								// Handle file upload response
-								data.fileResponse =
-									responseData.fileUploadAnswers.answers ?? [];
-							} else if (responseData.textAnswers) {
-								if (typeof responseData.textAnswers.answers === "string") {
-									data.response = [responseData.textAnswers.answers];
-								} else if (responseData.textAnswers.answers !== undefined) {
-									data.response = responseData.textAnswers.answers.map(
-										(answer) => answer.value || "",
-									);
-								}
-							}
-							const createdFieldResponse = trx
-								.insert(formFieldResponse)
-								.values(data)
-								.onConflictDoUpdate({
-									target: [
-										formFieldResponse.googleQuestionId,
-										formFieldResponse.formResponseId,
-									],
-									set: data,
-								})
-								.returning();
-							return createdFieldResponse;
-						},
-					);
+                            if (responseData.fileUploadAnswers) {
+                                // Handle file upload response
+                                data.fileResponse =
+                                    responseData.fileUploadAnswers.answers ??
+                                    [];
+                            } else if (responseData.textAnswers) {
+                                if (
+                                    typeof responseData.textAnswers.answers ===
+                                    "string"
+                                ) {
+                                    data.response = [
+                                        responseData.textAnswers.answers,
+                                    ];
+                                } else if (
+                                    responseData.textAnswers.answers !==
+                                    undefined
+                                ) {
+                                    data.response =
+                                        responseData.textAnswers.answers.map(
+                                            (answer) => answer.value || "",
+                                        );
+                                }
+                            }
+                            const createdFieldResponse = trx
+                                .insert(formFieldResponse)
+                                .values(data)
+                                .onConflictDoUpdate({
+                                    target: [
+                                        formFieldResponse.googleQuestionId,
+                                        formFieldResponse.formResponseId,
+                                    ],
+                                    set: data,
+                                })
+                                .returning();
+                            return createdFieldResponse;
+                        },
+                    );
 
-					// Await all the answer updates concurrently for this response
-					const result = await Promise.all(answerPromises);
-					logger.debug(
-						`Updated ${result.length} answers for response ${createdResponse.id}`,
-					);
-				});
+                    // Await all the answer updates concurrently for this response
+                    const result = await Promise.all(answerPromises);
+                    logger.debug(
+                        `Updated ${result.length} answers for response ${createdResponse.id}`,
+                    );
+                });
 
-				// Await all the response updates concurrently
-				const result = await Promise.all(responsePromises);
-				logger.debug(`Updated ${result.length} responses for form ${formId}`);
+                // Await all the response updates concurrently
+                const result = await Promise.all(responsePromises);
+                logger.debug(
+                    `Updated ${result.length} responses for form ${formId}`,
+                );
 
-				return updatedForm;
-			});
-			return result;
-		}),
-	getFile: protectedProcedure
-		.input(z.object({ fileId: z.string() }))
-		.query(async ({ ctx, input }) => {
-			const client = new google.auth.OAuth2({
-				clientId: env.GOOGLE_CLIENT_ID,
-				clientSecret: env.GOOGLE_CLIENT_SECRET,
-			});
+                return updatedForm;
+            });
+            return result;
+        }),
+    getFile: protectedProcedure
+        .input(z.object({ fileId: z.string() }))
+        .query(async ({ ctx, input }) => {
+            const client = new google.auth.OAuth2({
+                clientId: env.GOOGLE_CLIENT_ID,
+                clientSecret: env.GOOGLE_CLIENT_SECRET,
+            });
 
-			// Todo this eventually needs to be the existing owner
-			const userToken = await ctx.db.query.users.findFirst({
-				where: (user) => eq(user.id, ctx.session.user.id),
-			});
+            // Todo this eventually needs to be the existing owner
+            const userToken = await ctx.db.query.users.findFirst({
+                where: (user) => eq(user.id, ctx.session.user.id),
+            });
 
-			console.log(userToken);
+            console.log(userToken);
 
-			if (!userToken) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "User not found",
-				});
-			}
+            if (!userToken) {
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: "User not found",
+                });
+            }
 
-			client.setCredentials({
-				access_token: userToken.googleAccessToken,
-				refresh_token: userToken.googleRefreshToken,
-			});
+            client.setCredentials({
+                access_token: userToken.googleAccessToken,
+                refresh_token: userToken.googleRefreshToken,
+            });
 
-			// 1s22lrekgOnAYoUzgT84oo-qn1WakVT20
+            // 1s22lrekgOnAYoUzgT84oo-qn1WakVT20
 
-			// folder: 1LY2gfwPV1PmXdg9DYNDFiii6b02GpKXZZHS1WhYYR8eWJnMx6y7izgFVr4h5MsT4XCn-UrDQ
+            // folder: 1LY2gfwPV1PmXdg9DYNDFiii6b02GpKXZZHS1WhYYR8eWJnMx6y7izgFVr4h5MsT4XCn-UrDQ
 
-			// Fetch the file from google
-			const drive = google.drive({ version: "v3", auth: client });
-			const fileResponse = await drive.files.get({ fileId: input.fileId });
+            // Fetch the file from google
+            const drive = google.drive({ version: "v3", auth: client });
+            const fileResponse = await drive.files.get({
+                fileId: input.fileId,
+            });
 
-			const listResponse = await drive.files.list({
-				q: `'${input.fileId}' in parents`,
-			});
+            const listResponse = await drive.files.list({
+                q: `'${input.fileId}' in parents`,
+            });
 
-			if (!fileResponse.data) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "File not found",
-				});
-			}
-			return {
-				fileResponse: fileResponse.data,
-				listResponse: listResponse.data,
-			};
-		}),
+            if (!fileResponse.data) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: "File not found",
+                });
+            }
+            return {
+                fileResponse: fileResponse.data,
+                listResponse: listResponse.data,
+            };
+        }),
 });
