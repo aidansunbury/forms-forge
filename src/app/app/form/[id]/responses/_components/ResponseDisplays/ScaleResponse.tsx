@@ -1,7 +1,8 @@
-import { Circle, CircleCheckBig } from "lucide-react";
-import type React from "react";
-import type { FieldResponsesWithFormField } from "../responses.types";
 import { iconVariants } from "@/components/ui/icon";
+import { Circle, CircleCheckBig } from "lucide-react";
+// biome-ignore lint/style/useImportType: <explanation>
+import React from "react";
+import type { FieldResponsesWithFormField } from "../responses.types";
 
 const NumberAboveWrapper = ({
 	number,

@@ -210,8 +210,6 @@ export const form = createTable(
 
 		// Total responses for the form
 		responseCount: integer("response_count").default(0),
-
-		boardId: varchar("board_id", { length: 255 }).references(() => boards.id),
 		formGroupId: varchar("form_group_id", { length: 255 }).references(
 			() => formGroup.id,
 		),
@@ -246,6 +244,8 @@ export const formRelations = relations(form, ({ many, one }) => ({
 		fields: [form.formGroupId],
 		references: [formGroup.id],
 	}),
+	tableViews: many(tableView),
+	boardViews: many(boardView),
 	owner: one(users, { fields: [form.ownerId], references: [users.id] }),
 }));
 
@@ -415,22 +415,20 @@ export const formFieldResponseRelations = relations(
 //* Boards for organizing forms after the form is submitted
 
 // Each form has a board to keep track of the form responses
-export const boards = createTable("board", {
+export const boardView = createTable("board", {
 	id: varchar("id", { length: 255 })
 		.notNull()
 		.primaryKey()
 		.$defaultFn(() => generatePrefixedUUID("board")),
 
-	// boardName: varchar("board_name", { length: 255 }).notNull(),
-	// createdAt: timestamp("created_at", { withTimezone: true })
-	//   .default(sql`CURRENT_TIMESTAMP`)
-	//   .notNull(),
+	boardName: varchar("board_name", { length: 255 }).notNull(),
+	formId: varchar("form_id", { length: 255 }).references(() => form.id),
 });
 
 // Relationships
-export const boardsRelations = relations(boards, ({ many, one }) => ({
+export const boardsRelations = relations(boardView, ({ many, one }) => ({
 	columns: many(columns),
-	// form: one(form),
+	form: one(form, { fields: [boardView.formId], references: [form.id] }),
 }));
 
 // Columns table
@@ -444,7 +442,7 @@ export const columns = createTable(
 		columnName: varchar("column_name", { length: 255 }).notNull(),
 		boardId: varchar("board_id", { length: 255 })
 			.notNull()
-			.references(() => boards.id),
+			.references(() => boardView.id),
 		positionIndex: integer("position_index").notNull(), // Used to order the columns on the board
 		// createdAt: timestamp("created_at", { withTimezone: true })
 		//   .default(sql`CURRENT_TIMESTAMP`)
@@ -456,11 +454,24 @@ export const columns = createTable(
 );
 
 export const columnsRelations = relations(columns, ({ one, many }) => ({
-	board: one(boards, {
+	board: one(boardView, {
 		fields: [columns.boardId],
-		references: [boards.id],
+		references: [boardView.id],
 	}),
 	formResponses: many(formResponse),
+}));
+
+export const tableView = createTable("table_view", {
+	id: varchar("id", { length: 255 })
+		.notNull()
+		.primaryKey()
+		.$defaultFn(() => generatePrefixedUUID("table_view")),
+	tableName: varchar("view_name", { length: 255 }).notNull(),
+	formId: varchar("form_id", { length: 255 }).references(() => form.id),
+});
+
+export const tableViewRelations = relations(tableView, ({ one }) => ({
+	form: one(form, { fields: [tableView.formId], references: [form.id] }),
 }));
 
 //* NextAuth tables

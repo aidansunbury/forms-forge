@@ -26,7 +26,7 @@ export default function FormLayout({
 }>) {
 	const utils = api.useUtils();
 
-	const [form] = api.form.getFormByFields.useSuspenseQuery({
+	const [form] = api.form.getFormWithViews.useSuspenseQuery({
 		formId: params.id,
 	});
 	const { toast } = useToast();
@@ -93,7 +93,7 @@ export default function FormLayout({
 				</TooltipProvider>
 			</div>
 
-			<FormNav />
+			<FormNav formId={params.id} />
 			{children}
 		</div>
 	);

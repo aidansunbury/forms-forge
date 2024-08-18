@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { CirclePlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { api } from "@/trpc/react";
 import React from "react";
 
 import Link from "next/link";
@@ -20,7 +21,11 @@ import {
 	navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 
-export const FormNav = () => {
+export const FormNav = ({ formId }: { formId: string }) => {
+	const [form] = api.form.getFormWithViews.useSuspenseQuery({
+		formId,
+	});
+
 	const path = usePathname();
 	const basePath = path.split("/").slice(0, 4).join("/");
 	const currentPath = path.split("/")[4] || "";
@@ -61,10 +66,15 @@ export const FormNav = () => {
 						Table View
 					</NavigationMenuTrigger>
 					<NavigationMenuContent>
-						<ul className="grid gap-3 p-4 ">
-							<ListItem key={"1"} title="Customers" href="#">
-								{""}
-							</ListItem>
+						<ul className="grid gap-3 border p-4">
+							{form.tableViews.map((view) => (
+								<ListItem
+									key={view.id}
+									title={view.tableName}
+									href={`${basePath}/table/${view.id}`}
+								/>
+							))}
+
 							<Button variant="default">
 								<CirclePlus className="mr-1" />
 								New Table view
@@ -73,15 +83,19 @@ export const FormNav = () => {
 					</NavigationMenuContent>
 				</NavigationMenuItem>
 				<NavigationMenuItem>
-					<NavigationMenuTrigger className={getStyles("table")}>
+					<NavigationMenuTrigger className={getStyles("board")}>
 						Board View
 					</NavigationMenuTrigger>
 					<NavigationMenuContent>
-						<ul className="grid gap-3 p-4 ">
-							<ListItem key={"1"} title="Customers" href="#">
-								{""}
-							</ListItem>
-							<Button variant="secondary">
+						<ul className="grid gap-3 border p-4">
+							{form.boardViews.map((view) => (
+								<ListItem
+									key={view.id}
+									title={view.boardName}
+									href={`${basePath}/board/${view.id}`}
+								/>
+							))}
+							<Button variant="default">
 								<CirclePlus className="mr-1" />
 								New Board view
 							</Button>

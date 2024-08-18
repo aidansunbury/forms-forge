@@ -40,28 +40,63 @@ export const formRouter = createTRPCRouter({
 		return forms;
 	}),
 
-	// Form > FormFields > FormFieldResponses
-	getFormByFields: protectedProcedure
+	// Used for rendering form nav
+	getFormWithViews: protectedProcedure
 		.input(z.object({ formId: z.string() }))
 		.query(async ({ input }) => {
-			const retrievedForm = await db.query.form.findFirst({
-				where: eq(form.id, input.formId),
+			{
+				const retrievedFormWithViews = await db.query.form.findFirst({
+					where: eq(form.id, input.formId),
+					with: {
+						boardViews: true,
+						tableViews: true,
+					},
+				});
+				if (!retrievedFormWithViews) {
+					throw new TRPCError({
+						code: "NOT_FOUND",
+						message: `Form with id ${input.formId} not found`,
+					});
+				}
+				return retrievedFormWithViews;
+			}
+		}),
+
+	getTableData: protectedProcedure
+		.input(z.object({ formId: z.string() }))
+		.query(async ({ input }) => {
+			// Return the form fields, then all the responses without the form fields
+
+			const retrievedFormFieldsPromise = db.query.formFields.findMany({
+				where: eq(formFields.formId, input.formId),
+				orderBy: asc(formFields.positionIndex),
+			});
+
+			const retrievedFormResponsesPromise = db.query.formResponse.findMany({
+				where: eq(formResponseDBSchema.formId, input.formId),
 				with: {
-					formFields: {
-						with: {
-							formFieldResponses: true,
-						},
-						orderBy: asc(formFields.positionIndex),
+					formFieldResponses: {
+						orderBy: asc(formFieldResponse.parentPositionIndex),
 					},
 				},
 			});
-			if (!retrievedForm) {
+
+			const [retrievedFormFields, retrievedFormResponses] = await Promise.all([
+				retrievedFormFieldsPromise,
+				retrievedFormResponsesPromise,
+			]);
+
+			if (!retrievedFormFields) {
 				throw new TRPCError({
 					code: "NOT_FOUND",
 					message: `Form with id ${input.formId} not found`,
 				});
 			}
-			return retrievedForm;
+
+			return {
+				formFields: retrievedFormFields,
+				formResponses: retrievedFormResponses,
+			};
 		}),
 
 	// Form > Responses > FormFieldResponses > FormField
