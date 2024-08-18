@@ -35,7 +35,7 @@ export type FieldOptions =
 	| { optionType: "fileUpload"; folderId: string }
 	| {
 			optionType: "grid";
-			rowQuestion: string;
+			rowQuestion: string; // This is the question title of the individual row in the grid
 			grid: {
 				columns: {
 					type: "radio" | "checkbox";
@@ -274,8 +274,11 @@ export const formFields = createTable(
 			.references(() => form.id),
 		// Ensures that fields are ordered correctly based on order received from Google
 		positionIndex: integer("position_index"),
+
+		// TODO: Would be better to have this be required, but default to 0 and be unused for non-grid questions
 		// Used for grid questions
-		positionSubIndex: integer("position_sub_index"),
+		positionSubIndex: integer("position_sub_index").default(0),
+
 		fieldName: varchar("field_name").notNull(),
 		fieldDescription: varchar("field_description"),
 		fieldType: fieldTypeEnum("field_type").notNull(),

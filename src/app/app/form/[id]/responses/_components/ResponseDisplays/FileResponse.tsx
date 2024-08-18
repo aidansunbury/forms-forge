@@ -1,12 +1,15 @@
+import { ShortenedText } from "@/components/ShortenedText";
 import { Badge, badgeVariants } from "@/components/ui/badge";
+import type { FileResponse as FileResponseType } from "@/server/db/schema";
 import Link from "next/link";
-import type { FileResponse } from "@/server/db/schema";
 
 const getFileViewUrl = (fileId: string) => {
 	return `https://drive.google.com/file/d/${fileId}/view`;
 };
 
-export const FileComponent = ({ files }: { files: FileResponse[] | null }) => {
+export const FileResponse = ({
+	files,
+}: { files: FileResponseType[] | null }) => {
 	if (!files) {
 		return null;
 	}
@@ -19,7 +22,7 @@ export const FileComponent = ({ files }: { files: FileResponse[] | null }) => {
 					key={file.fileId}
 					target="_blank"
 				>
-					{file.fileName}
+					<ShortenedText maxLength={40} text={file.fileName} />
 				</Link>
 			))}
 		</div>

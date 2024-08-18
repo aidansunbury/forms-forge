@@ -7,17 +7,17 @@ export interface TextProps
 	extends React.HTMLAttributes<HTMLParagraphElement>,
 		VariantProps<typeof text> {
 	as?: "p" | "span" | "div";
-	size?: "sm" | "base" | "lg" | "light" | "xs";
 }
 
 const text = cva("leading-relaxed", {
 	variants: {
 		size: {
-			xs: "text-xs font-light text-gray-600",
-			sm: "text-sm font-normal text-gray-600",
-			light: "text-base font-normal text-gray-600",
-			base: "text-base font-medium text-gray-900",
-			lg: "text-lg font-medium text-gray-900",
+			xs: "font-light text-gray-600 text-xs",
+			sm: "font-normal text-gray-600 text-sm",
+			smDark: "font-normal text-gray-900 text-sm",
+			light: "font-normal text-base text-gray-600",
+			base: "font-medium text-base text-gray-900",
+			lg: "font-medium text-gray-900 text-lg",
 		},
 	},
 	defaultVariants: {

@@ -24,9 +24,9 @@ export default function AppLayout({
 	return (
 		<TooltipProvider>
 			<SessionProvider>
-				<div className="flex min-h-screen w-full flex-col bg-muted/40">
-					<aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">
-						<nav className="mt-12 flex flex-col items-center gap-4 px-2 sm:py-5 h-full">
+				<div className="flex min-h-screen w-full flex-col ">
+					<aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-muted sm:flex">
+						<nav className="mt-12 flex h-full flex-col items-center gap-4 px-2 sm:py-5">
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<Link
@@ -44,7 +44,7 @@ export default function AppLayout({
 							</div>
 						</nav>
 					</aside>
-					<div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14 bg-background">
+					<div className="flex flex-col bg-background sm:gap-4 sm:py-4 sm:pl-14">
 						<header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
 							{/* Expandable navbar */}
 							<Sheet>
@@ -55,7 +55,7 @@ export default function AppLayout({
 									</Button>
 								</SheetTrigger>
 								<SheetContent side="left" className="sm:max-w-xs">
-									<nav className="grid gap-6 text-lg font-medium">
+									<nav className="grid gap-6 font-medium text-lg">
 										<Link
 											href="/app/dashboard"
 											className="flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground"

@@ -65,7 +65,7 @@ export const FormNav = () => {
 							<ListItem key={"1"} title="Customers" href="#">
 								{""}
 							</ListItem>
-							<Button variant="secondary">
+							<Button variant="default">
 								<CirclePlus className="mr-1" />
 								New Table view
 							</Button>
@@ -108,8 +108,8 @@ const ListItem = React.forwardRef<
 					)}
 					{...props}
 				>
-					<div className="text-sm font-medium leading-none">{title}</div>
-					<p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+					<div className="font-medium text-sm leading-none">{title}</div>
+					<p className="line-clamp-2 text-muted-foreground text-sm leading-snug">
 						{children}
 					</p>
 				</a>

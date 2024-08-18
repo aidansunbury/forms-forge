@@ -23,9 +23,9 @@ import {
 } from "drizzle-orm";
 
 import { env } from "@/env";
+import { sql } from "drizzle-orm";
 import { google } from "googleapis";
 import { getQuestionOptions, getQuestionTypeAndData } from "./formHelpers";
-import { sql } from "drizzle-orm";
 
 import { logger } from "../../utils/logger";
 
@@ -81,6 +81,7 @@ export const formRouter = createTRPCRouter({
 											fieldType: true,
 											fieldOptions: true,
 											positionIndex: true,
+											positionSubIndex: true,
 										},
 									},
 								},
@@ -223,18 +224,33 @@ export const formRouter = createTRPCRouter({
 					if (field.questionGroupItem?.grid) {
 						// Handle grid questions
 						let subIndex = 0;
+						const questionsTitle = field.title ?? "Unnamed Field";
 						for (const question of field.questionGroupItem.questions ?? []) {
+							const fieldOptions = {
+								optionType: "grid" as const,
+								rowQuestion: question.rowQuestion?.title || "Unnamed Field", // The name of the sub question
+								grid: {
+									columns: {
+										type: "radio" as const, // don't care
+										options:
+											field.questionGroupItem.grid.columns?.options?.map(
+												(option) => option.value || "",
+											) ?? [],
+									},
+								},
+							};
+
 							const fieldData: InferInsertModel<typeof formFields> = {
 								googleItemId: field.itemId,
 								googleQuestionId: question.questionId,
-								fieldName: question.rowQuestion?.title || "Unnamed Field",
+								fieldName: questionsTitle,
 								fieldType: "grid",
 								required: question.required || false,
 								formId,
 								positionIndex: index,
 								positionSubIndex: subIndex,
 								// Todo parse grid correctly
-								fieldOptions: field.questionGroupItem.grid,
+								fieldOptions: fieldOptions,
 							};
 
 							const newField = trx
@@ -314,6 +330,7 @@ export const formRouter = createTRPCRouter({
 				const responses = formResponses.data.responses ?? [];
 
 				// Increment the form responses total
+				// Todo this does not need to be awaited, and further it needs to not add duplicates
 				const updatedCount = await trx
 					.update(form)
 					.set({
@@ -321,8 +338,6 @@ export const formRouter = createTRPCRouter({
 					})
 					.where(eq(form.id, formId))
 					.returning();
-
-				console.log(updatedCount);
 
 				logger.debug(
 					`Fetched ${responses.length} responses submitted after ${responseAfterTimestamp}`,
@@ -387,7 +402,7 @@ export const formRouter = createTRPCRouter({
 									);
 								}
 							}
-							const [createdFieldResponse] = await trx
+							const createdFieldResponse = trx
 								.insert(formFieldResponse)
 								.values(data)
 								.onConflictDoUpdate({

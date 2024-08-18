@@ -51,7 +51,7 @@ export default function FormLayout({
 
 	return (
 		<div className="flex w-full flex-col items-center">
-			<div className="self-start flex flex-row">
+			<div className="flex flex-row self-start">
 				<Header className="mt-2" as="h1" size="h1">
 					{form.formName}
 				</Header>
