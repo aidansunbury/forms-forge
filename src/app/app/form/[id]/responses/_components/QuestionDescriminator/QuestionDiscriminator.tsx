@@ -4,6 +4,7 @@ import type React from "react";
 import { QuestionWrapper } from "../QuestionWrapper/QuestionWrapper";
 import { FileResponse } from "../ResponseDisplays/FileResponse";
 import { MultipleChoiceResponse } from "../ResponseDisplays/MultipleChoiceResponse";
+import { ScaleResponse } from "../ResponseDisplays/ScaleResponse";
 import type {
 	BlockSize,
 	FieldResponsesWithFormField,
@@ -28,11 +29,7 @@ export const QuestionDiscriminator = ({
 			size = "large";
 		}
 
-		AnswerDisplay = (
-			<Text className="" size="lg">
-				{question.response}
-			</Text>
-		);
+		AnswerDisplay = <Text size="lg">{question.response}</Text>;
 	} else if (question.formField.fieldOptions.optionType === "multipleChoice") {
 		if (question.response.length >= 3) {
 			size = "medium";
@@ -43,6 +40,14 @@ export const QuestionDiscriminator = ({
 		AnswerDisplay = (
 			<MultipleChoiceResponse response={question} field={question.formField} />
 		);
+	} else if (question.formField.fieldOptions.optionType === "scale") {
+		size =
+			question.formField.fieldOptions.high -
+				question.formField.fieldOptions.low >
+			5
+				? "medium"
+				: "small";
+		AnswerDisplay = <ScaleResponse response={question} />;
 	}
 	return (
 		<QuestionWrapper

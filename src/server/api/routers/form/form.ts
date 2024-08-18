@@ -81,6 +81,7 @@ export const formRouter = createTRPCRouter({
 											fieldType: true,
 											fieldOptions: true,
 											positionIndex: true,
+											positionSubIndex: true,
 										},
 									},
 								},
@@ -223,18 +224,33 @@ export const formRouter = createTRPCRouter({
 					if (field.questionGroupItem?.grid) {
 						// Handle grid questions
 						let subIndex = 0;
+						const questionsTitle = field.title ?? "Unnamed Field";
 						for (const question of field.questionGroupItem.questions ?? []) {
+							const fieldOptions = {
+								optionType: "grid" as const,
+								rowQuestion: question.rowQuestion?.title || "Unnamed Field", // The name of the sub question
+								grid: {
+									columns: {
+										type: "radio" as const, // don't care
+										options:
+											field.questionGroupItem.grid.columns?.options?.map(
+												(option) => option.value || "",
+											) ?? [],
+									},
+								},
+							};
+
 							const fieldData: InferInsertModel<typeof formFields> = {
 								googleItemId: field.itemId,
 								googleQuestionId: question.questionId,
-								fieldName: question.rowQuestion?.title || "Unnamed Field",
+								fieldName: questionsTitle,
 								fieldType: "grid",
 								required: question.required || false,
 								formId,
 								positionIndex: index,
 								positionSubIndex: subIndex,
 								// Todo parse grid correctly
-								fieldOptions: field.questionGroupItem.grid,
+								fieldOptions: fieldOptions,
 							};
 
 							const newField = trx

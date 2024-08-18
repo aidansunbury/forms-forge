@@ -7,7 +7,11 @@ import {
 import { Text } from "@/components/ui/text";
 import { formatTimestamp } from "@/lib/dateFormat";
 import { QuestionDiscriminator } from "./QuestionDescriminator/QuestionDiscriminator";
-import type { FormResponseWithFieldResponses } from "./responses.types";
+import { GridDisplay } from "./ResponseDisplays/GridDisplay";
+import type {
+	FieldResponsesWithFormField,
+	FormResponseWithFieldResponses,
+} from "./responses.types";
 
 export const ResponseView = ({
 	response,
@@ -15,19 +19,53 @@ export const ResponseView = ({
 	response: FormResponseWithFieldResponses;
 }) => {
 	const ComponentArray: React.ReactNode[] = [];
+
+	let currentGridIndex: null | number = null;
+	let gridResponses: FieldResponsesWithFormField[] = [];
+
 	for (let i = 0; i < response.formFieldResponses.length; i++) {
 		const field = response.formFieldResponses[i];
 		if (!field) {
 			continue;
 		}
 
-		if (field.formField.fieldType === "grid") {
-			continue;
-			// Todo: Implement grid display
+		// Handles three cases, grid -> non-grid, grid -> grid, grid -> end
+		if (
+			currentGridIndex !== null &&
+			field.parentPositionIndex !== currentGridIndex
+		) {
+			ComponentArray.push(
+				<GridDisplay responses={gridResponses} index={i} key={field.id} />,
+			);
+			gridResponses = [];
+			currentGridIndex = null;
 		}
-		ComponentArray.push(
-			<QuestionDiscriminator question={field} index={i} key={field.id} />,
-		);
+
+		if (field.formField.fieldType === "grid") {
+			currentGridIndex = field.parentPositionIndex;
+			gridResponses.push(field);
+		} else {
+			if (gridResponses.length > 0) {
+				ComponentArray.push(
+					<GridDisplay responses={gridResponses} index={i} key={field.id} />,
+				);
+				gridResponses = [];
+				currentGridIndex = null;
+			}
+			ComponentArray.push(
+				<QuestionDiscriminator question={field} index={i} key={field.id} />,
+			);
+		}
+
+		// Special check for if the grid is the last question
+		if (
+			i === response.formFieldResponses.length - 1 &&
+			gridResponses.length > 0
+		) {
+			ComponentArray.push(
+				<GridDisplay responses={gridResponses} index={i} key={field.id} />,
+			);
+		}
 	}
 
 	return (
