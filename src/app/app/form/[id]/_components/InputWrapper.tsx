@@ -34,7 +34,7 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import type { formFields } from "@/server/db/schema";
-import { type InferSelectModel, is } from "drizzle-orm";
+import { type InferSelectModel } from "drizzle-orm";
 import { type Control, type Path, useFormContext } from "react-hook-form";
 import type { FormData } from "./FormViewer";
 

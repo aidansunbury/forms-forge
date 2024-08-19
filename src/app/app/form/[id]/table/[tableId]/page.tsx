@@ -1,10 +1,6 @@
 "use client";
 
 import { Header } from "@/components/ui/header";
-import { type Payment, columns } from "./_components/columns";
-import { DataTable } from "./_components/table";
-
-import { access } from "node:fs";
 import { api } from "@/trpc/react";
 
 export type Question = {
@@ -18,15 +14,6 @@ const TableView = async ({
     const [data] = api.form.getTableData.useSuspenseQuery({
         formId: params.id,
     });
-
-    const data2: Payment[] = [
-        {
-            amount: 100,
-            email: "aidan",
-            id: "1",
-            status: "pending",
-        },
-    ];
 
     // This is how you will receive the data from the server
     // An array of responses, which has an array of field responses
@@ -70,8 +57,19 @@ const TableView = async ({
 
     const fetchedHeaders = data.formFields.map((field) => ({
         accessorKey: field.googleQuestionId,
+        id: field.googleQuestionId,
         header: field.fieldName,
+        cell: (info) => info.getValue(),
+        size: 180,
     }));
+
+    fetchedHeaders.push({
+        accessorKey: "respondentEmail",
+        id: "respondentEmail",
+        header: "Respondent Email",
+        cell: (info) => info.getValue(),
+        size: 180,
+    });
 
     const formattedFetchedData = data.formResponses.map((response) => {
         const formattedResponse: Record<string, string> = {};
@@ -79,6 +77,7 @@ const TableView = async ({
             formattedResponse[fieldResponse.googleQuestionId] =
                 fieldResponse.response;
         }
+        formattedResponse.respondentEmail = response.respondentEmail || "";
         return formattedResponse;
     });
 
@@ -88,44 +87,8 @@ const TableView = async ({
                 Table
             </Header>
             Table {params.tableId}
-            <DataTable
-                columns={dynamicHeaders.map((header) => ({
-                    accessorKey: header,
-                    header: header.toUpperCase(),
-                }))}
-                data={formattedData}
-            />
-            <DataTable columns={fetchedHeaders} data={formattedFetchedData} />
-            {/* {JSON.stringify(formattedFetchedData)} */}
         </div>
     );
 };
 
 export default TableView;
-
-// export type Payment = {
-// 	id: string;
-// 	amount: number;
-// 	status: "pending" | "processing" | "success" | "failed";
-// 	email: string;
-// };
-
-// export type Question = {
-// 	id: string;
-// 	question: string;
-// };
-
-// export const columns: ColumnDef<Payment>[] = [
-// 	{
-// 		accessorKey: "status",
-// 		header: "Status",
-// 	},
-// 	{
-// 		accessorKey: "email",
-// 		header: "Email",
-// 	},
-// 	{
-// 		accessorKey: "amount",
-// 		header: "Amount",
-// 	},
-// ];
