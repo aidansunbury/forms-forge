@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { relations, sql } from "drizzle-orm";
 import {
     bigint,
@@ -16,40 +15,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type { AdapterAccount } from "next-auth/adapters";
 
-export type FieldOptions =
-    | { optionType: "text"; paragraph: boolean }
-    | {
-          optionType: "multipleChoice";
-          type: "radio" | "checkbox";
-          options: string[];
-      }
-    | {
-          optionType: "scale";
-          low: number;
-          high: number;
-          lowLabel: string;
-          highLabel: string;
-      }
-    | { optionType: "date"; includeTime: boolean; includeYear: boolean }
-    | { optionType: "time"; duration: boolean } // is the question an elapsed time or time of day
-    | { optionType: "fileUpload"; folderId: string }
-    | {
-          optionType: "grid";
-          rowQuestion: string; // This is the question title of the individual row in the grid
-          grid: {
-              columns: {
-                  type: "radio" | "checkbox";
-                  options: string[];
-              };
-          };
-      };
-
-export type FileResponse = {
-    fileId: string;
-    fileName: string;
-    mimeType: string;
-};
-
+import type { FileResponseType, FieldOptions } from "./schema.types";
+import { generatePrefixedUUID } from "./generatePrefixedUUID";
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
  * database instance for multiple projects.
@@ -57,12 +24,6 @@ export type FileResponse = {
  * @see https://orm.drizzle.team/docs/goodies#multi-project-schema
  */
 export const createTable = pgTableCreator((name) => `${name}`);
-
-// Function to generate a prefixed UUID
-const generatePrefixedUUID = (prefix: string) => {
-    const uuid = crypto.randomUUID();
-    return `${prefix}_${uuid}`;
-};
 
 export const users = createTable("user", {
     id: varchar("id", { length: 255 })
@@ -256,7 +217,7 @@ export const formRelations = relations(form, ({ many, one }) => ({
     owner: one(users, { fields: [form.ownerId], references: [users.id] }),
 }));
 
-export const fieldTypeEnum = pgEnum("field_type_enum", [
+export const fieldOptions = [
     "text",
     "multipleChoice",
     "scale",
@@ -264,7 +225,9 @@ export const fieldTypeEnum = pgEnum("field_type_enum", [
     "time",
     "fileUpload",
     "grid",
-]);
+] as const;
+
+export const fieldTypeEnum = pgEnum("field_type_enum", fieldOptions);
 
 // Corresponds to: https://developers.google.com/forms/api/reference/rest/v1/forms#Item
 export const formFields = createTable(
@@ -274,6 +237,7 @@ export const formFields = createTable(
             .notNull()
             .primaryKey()
             .$defaultFn(() => generatePrefixedUUID("field")),
+        isGoogleField: boolean("is_google_field").default(true),
         googleItemId: varchar("google_item_id", { length: 255 }),
         googleQuestionId: varchar("google_question_id", {
             length: 255,
@@ -285,13 +249,13 @@ export const formFields = createTable(
         positionIndex: integer("position_index"),
 
         // TODO: Would be better to have this be required, but default to 0 and be unused for non-grid questions
+        //* This can also be used for custom "row questions"
         // Used for grid questions
         positionSubIndex: integer("position_sub_index").default(0),
 
         fieldName: varchar("field_name").notNull(),
         fieldDescription: varchar("field_description"),
         fieldType: fieldTypeEnum("field_type").notNull(),
-        // Value dependent on the field type
         fieldOptions: json("field_options").$type<FieldOptions>().notNull(),
         required: boolean("required").notNull().default(false),
     },
@@ -396,7 +360,7 @@ export const formFieldResponse = createTable(
             .notNull()
             .references(() => formFields.googleQuestionId),
         response: varchar("response").array(),
-        fileResponse: json("file_response").$type<FileResponse>().array(),
+        fileResponse: json("file_response").$type<FileResponseType>().array(),
     },
     (formFieldResponse) => ({
         formResponseIdIdx: index(

@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 
 export const orgRouter = createTRPCRouter({
     create: protectedProcedure
-        .input(withOrgId.extend({ organizationName: z.string() }))
+        .input(z.object({ organizationName: z.string() }))
         .mutation(async ({ input, ctx }) => {
             try {
                 const createOrg = await db.transaction(async (trx) => {
