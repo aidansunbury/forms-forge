@@ -1,6 +1,6 @@
 import { ShortenedText } from "@/components/ShortenedText";
 import { Badge, badgeVariants } from "@/components/ui/badge";
-import type { FileResponse as FileResponseType } from "@/server/db/schema";
+import type { FileResponseType as FileResponseType } from "@/server/db/schema.types";
 import Link from "next/link";
 
 const getFileViewUrl = (fileId: string) => {

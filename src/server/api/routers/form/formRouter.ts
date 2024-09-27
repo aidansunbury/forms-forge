@@ -101,6 +101,17 @@ export const formRouter = createTRPCRouter({
             };
         }),
 
+    // Used for questions display
+    getFormFields: protectedProcedure
+        .input(z.object({ formId: z.string() }))
+        .query(async ({ input }) => {
+            const retrievedFormFields = await db.query.formFields.findMany({
+                where: eq(formFields.formId, input.formId),
+                orderBy: asc(formFields.positionIndex),
+            });
+            return retrievedFormFields;
+        }),
+
     // Form > Responses > FormFieldResponses > FormField
     getFormByResponses: protectedProcedure
         .input(z.object({ formId: z.string() }))
@@ -508,56 +519,58 @@ export const formRouter = createTRPCRouter({
             });
             return result;
         }),
-    getFile: protectedProcedure
-        .input(z.object({ fileId: z.string() }))
-        .query(async ({ ctx, input }) => {
-            const client = new google.auth.OAuth2({
-                clientId: env.GOOGLE_CLIENT_ID,
-                clientSecret: env.GOOGLE_CLIENT_SECRET,
-            });
 
-            // Todo this eventually needs to be the existing owner
-            const userToken = await ctx.db.query.users.findFirst({
-                where: (user) => eq(user.id, ctx.session.user.id),
-            });
+    //! Unused
+    // getFile: protectedProcedure
+    //     .input(z.object({ fileId: z.string() }))
+    //     .query(async ({ ctx, input }) => {
+    //         const client = new google.auth.OAuth2({
+    //             clientId: env.GOOGLE_CLIENT_ID,
+    //             clientSecret: env.GOOGLE_CLIENT_SECRET,
+    //         });
 
-            console.log(userToken);
+    //         // Todo this eventually needs to be the existing owner
+    //         const userToken = await ctx.db.query.users.findFirst({
+    //             where: (user) => eq(user.id, ctx.session.user.id),
+    //         });
 
-            if (!userToken) {
-                throw new TRPCError({
-                    code: "INTERNAL_SERVER_ERROR",
-                    message: "User not found",
-                });
-            }
+    //         console.log(userToken);
 
-            client.setCredentials({
-                access_token: userToken.googleAccessToken,
-                refresh_token: userToken.googleRefreshToken,
-            });
+    //         if (!userToken) {
+    //             throw new TRPCError({
+    //                 code: "INTERNAL_SERVER_ERROR",
+    //                 message: "User not found",
+    //             });
+    //         }
 
-            // 1s22lrekgOnAYoUzgT84oo-qn1WakVT20
+    //         client.setCredentials({
+    //             access_token: userToken.googleAccessToken,
+    //             refresh_token: userToken.googleRefreshToken,
+    //         });
 
-            // folder: 1LY2gfwPV1PmXdg9DYNDFiii6b02GpKXZZHS1WhYYR8eWJnMx6y7izgFVr4h5MsT4XCn-UrDQ
+    //         // 1s22lrekgOnAYoUzgT84oo-qn1WakVT20
 
-            // Fetch the file from google
-            const drive = google.drive({ version: "v3", auth: client });
-            const fileResponse = await drive.files.get({
-                fileId: input.fileId,
-            });
+    //         // folder: 1LY2gfwPV1PmXdg9DYNDFiii6b02GpKXZZHS1WhYYR8eWJnMx6y7izgFVr4h5MsT4XCn-UrDQ
 
-            const listResponse = await drive.files.list({
-                q: `'${input.fileId}' in parents`,
-            });
+    //         // Fetch the file from google
+    //         const drive = google.drive({ version: "v3", auth: client });
+    //         const fileResponse = await drive.files.get({
+    //             fileId: input.fileId,
+    //         });
 
-            if (!fileResponse.data) {
-                throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "File not found",
-                });
-            }
-            return {
-                fileResponse: fileResponse.data,
-                listResponse: listResponse.data,
-            };
-        }),
+    //         const listResponse = await drive.files.list({
+    //             q: `'${input.fileId}' in parents`,
+    //         });
+
+    //         if (!fileResponse.data) {
+    //             throw new TRPCError({
+    //                 code: "NOT_FOUND",
+    //                 message: "File not found",
+    //             });
+    //         }
+    //         return {
+    //             fileResponse: fileResponse.data,
+    //             listResponse: listResponse.data,
+    //         };
+    //     }),
 });

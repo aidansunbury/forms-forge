@@ -10,6 +10,7 @@ const cardVariants = cva(
             variant: {
                 default: "m-1 h-64 w-64 border hover:shadow-lg",
                 selected: "border-blue-400 border-y-0 border-r-0 border-l-4",
+                dynamicSize: "border hover:shadow-lg",
             },
         },
         defaultVariants: {
